@@ -1,0 +1,30 @@
+# Explicit opt-in to the artifacts already trained on the host.
+# docker compose -f docker-compose.yml -f docker-compose.trained.yml up --build -d api demo
+x-trained-volumes: &trained-volumes
+  - type: bind
+    source: ./var/thesis
+    target: /data
+    bind:
+      create_host_path: false
+  - type: bind
+    source: ./data/dataset_v2
+    target: /data/dataset_v2
+    read_only: true
+    bind:
+      create_host_path: false
+
+services:
+  api:
+    volumes: *trained-volumes
+    environment:
+      RPV_PROJECTION_CKPT: /data/projection_head.pt
+      RPV_RESIZE_MODE: pad
+      RPV_IMAGE_SIZE: "224"
+      RPV_TTA: "1"
+  demo:
+    volumes: *trained-volumes
+    environment:
+      RPV_PROJECTION_CKPT: /data/projection_head.pt
+      RPV_RESIZE_MODE: pad
+      RPV_IMAGE_SIZE: "224"
+      RPV_TTA: "1"

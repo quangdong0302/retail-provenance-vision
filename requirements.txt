@@ -1,0 +1,13 @@
+# One dependency list for training, evaluation, API, UI and code checks.
+# An existing compatible CUDA installation of torch is kept by pip.
+numpy>=1.24
+Pillow>=10.0
+torch>=2.1
+certifi>=2024.2.2
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+pydantic>=2.5
+gradio>=4.20
+httpx>=0.27
+ruff==0.16.7

@@ -1,0 +1,39 @@
+services:
+  api:
+    build:
+      context: .
+    image: rpv:latest
+    container_name: rpv-api
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["rpv-data:/data"]
+    environment:
+      RPV_ENCODER: dinov2
+      RPV_DINOV2_VARIANT: vits14
+      RPV_ALPHA: "0.10"
+      RPV_EMBED_CACHE: "1"
+      RPV_EXTERNAL_ADAPTERS: "0"   # tắt gọi mạng: kết quả phải tái lập được
+    # start_period dài vì lần chạy đầu phải tải trọng số DINOv2.
+    restart: unless-stopped
+
+  demo:
+    image: rpv:latest
+    container_name: rpv-demo
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ["python", "-m", "app.demo"]
+    ports: ["127.0.0.1:7860:7860"]
+    volumes: ["rpv-data:/data"]
+    environment:
+      RPV_ENCODER: dinov2
+      RPV_DINOV2_VARIANT: vits14
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:7860/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  rpv-data:
