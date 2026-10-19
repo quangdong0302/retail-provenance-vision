@@ -1,0 +1,47 @@
+{
+  "summary": {
+    "protocol": "known_unknown_70_30_v1",
+    "n_train_images": 2878,
+    "n_validation_images": 1887,
+    "n_known_classes": 17,
+    "n_train_classes": 17,
+    "n_novel_classes": 7,
+    "n_support_images": 34,
+    "n_calib_images": 1915,
+    "n_test_images": 1927,
+    "n_unknown_calib": 0,
+    "n_unknown_test": 4200,
+    "n_novel_support": 35,
+    "n_novel_query": 836
+  },
+  "fingerprint": "056b87151056b14a78d626ecf1872e75832de813d22ab91b65a0fad83bc87862",
+  "dataset_fingerprint": "dc420dd70c2db61562551644f187199d91f5bf7d179efabc5ae11bc231118e93",
+  "known_classes": [
+    "Bắp cải trắng",
+    "Bắp ngô",
+    "Chanh màu cam",
+    "Cà chua bi vàng",
+    "Cà chua hồng",
+    "Cà chua tim bò",
+    "Cà rốt",
+    "Dưa hấu dài",
+    "Hành tây tím",
+    "Rau xà lách xanh",
+    "Súp lơ trắng",
+    "Táo Granny Smith",
+    "Táo Ligol",
+    "Táo Red Delicious",
+    "Táo Spartan",
+    "Xoài",
+    "Ớt chuông vàng"
+  ],
+  "unknown_classes": [
+    "Bơ Hass",
+    "Chuối vàng",
+    "Cà chua vàng",
+    "Dưa leo cỡ vừa",
+    "Nho đen",
+    "Táo Fuji",
+    "Ớt chuông xanh"
+  ]
+}

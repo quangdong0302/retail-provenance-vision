@@ -1,0 +1,218 @@
+{
+  "encoder": {
+    "tag": "dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1",
+    "dim": 480,
+    "cache_tag": "dinov2_vits14_s336_90f15cb97276985d",
+    "variant": "vits14",
+    "backbone_dim": 384,
+    "image_size": 336,
+    "center_crop": true,
+    "crop_ratio": 0.875,
+    "weights_sha256": "190859844203f530e178165b42ed96c811144b0c1945d8b8e8306e68e468ab48",
+    "resize_mode": "pad",
+    "use_tta": false,
+    "head_metadata": {
+      "dataset_fingerprint": "dc420dd70c2db61562551644f187199d91f5bf7d179efabc5ae11bc231118e93",
+      "split_fingerprint": "056b87151056b14a78d626ecf1872e75832de813d22ab91b65a0fad83bc87862",
+      "development_fingerprint": "3f1bcd53cf7e13cf4d702bcfbc3e80a7ba6ed7e3c5dc4e7b8eeb68604b648415"
+    },
+    "device": "cuda",
+    "projection_head": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\projection_head.pt",
+    "catalog_backend": "prototype",
+    "color_weight": 0.3,
+    "color_dim": 96,
+    "color_cache": {
+      "tag": "foreground_hs128_h24_s4_hellinger_v1",
+      "dim": 96,
+      "n_entries": 18624,
+      "path": "var\\embed_cache\\foreground_hs128_h24_s4_hellinger_v1-02cbe15c70.npz",
+      "hits": 11090,
+      "misses": 0,
+      "disk_bytes": 13112044
+    }
+  },
+  "closed_set": {
+    "accuracy_all_classes": 0.8188894654903995,
+    "macro_f1_all_classes": 0.8183034822496336,
+    "macro_f1_with_unknown": 0.6390245813274593,
+    "n_test_images": 1927
+  },
+  "open_set": {
+    "threshold": 0.8709140938168102,
+    "known_recall": 0.8676699532952776,
+    "unknown_reject_rate": 0.7028571428571428,
+    "false_accept_rate": 0.29714285714285715,
+    "auroc": 0.8641173054587689,
+    "n_known": 1927,
+    "n_unknown": 4200,
+    "score": "energy",
+    "distance_baseline": {
+      "threshold": 0.9430068731307983,
+      "known_recall": 0.8604047742605085,
+      "unknown_reject_rate": 0.7014285714285714,
+      "false_accept_rate": 0.2985714285714286,
+      "auroc": 0.8632034744359601,
+      "n_known": 1927,
+      "n_unknown": 4200,
+      "fpr_at_95tpr": {
+        "threshold": 1.0514497756958008,
+        "tpr": 0.9501816294758693,
+        "fpr": 0.6202380952380953
+      }
+    }
+  },
+  "selective": {
+    "status_distribution": {
+      "ambiguous": 1321,
+      "match": 351,
+      "unknown": 255
+    },
+    "mean_prediction_set_size": 1.8531395952257395,
+    "empirical_coverage": 0.9335755059678257,
+    "empirical_coverage_after_ood": 0.8220031136481578,
+    "decision_set_label_coverage": 0.7488323819408407,
+    "set_metrics_scope": "Raw conformal sets before Energy/risk gates; combined gate has no conformal coverage guarantee.",
+    "nonempty_set_rate": 0.9849507005708354,
+    "singleton_accuracy": 0.9914529914529915,
+    "n_singleton": 351,
+    "n_singleton_conformal_before_gates": 1064,
+    "target_coverage": 0.9,
+    "abstention_rate": 0.8178515827711469,
+    "unknown_items_correctly_rejected": 0.7028571428571428,
+    "unknown_auto_accept_rate": 0.005238095238095238,
+    "unknown_handoff_rate": 0.9947619047619047,
+    "coverage_at_risk_1pct": 0.18629994810586403,
+    "coverage_at_risk_5pct": 0.34665282823040994,
+    "coverage_at_risk_10pct": 0.5573430202387131,
+    "risk_coverage_scope": "Known-test diagnostic sweep; never used to select the deployed threshold.",
+    "operating_point_known": {
+      "target_risk": 0.04,
+      "coverage": 0.18214841722885314,
+      "selective_risk": 0.008547008547008517,
+      "n_answered": 351,
+      "target_met_on_test": true
+    },
+    "operating_point_known_and_unknown": {
+      "target_risk": 0.04,
+      "coverage": 0.06087808062673413,
+      "selective_risk": 0.06702412868632712,
+      "n_answered": 373,
+      "target_met_on_test": false
+    }
+  },
+  "verification": {
+    "n_genuine": 1927,
+    "n_impostor": 1927,
+    "false_accept_rate": 0.0,
+    "false_reject_rate": 0.8194084068500259,
+    "accuracy": 0.590295796574987,
+    "auroc": 0.9815876804883166,
+    "eer": 0.06071613907628437,
+    "eer_threshold": 1.116367220878601,
+    "nearest_wrong_claim": {
+      "n_genuine": 1927,
+      "n_impostor": 1927,
+      "false_accept_rate": 0.0015568240788790867,
+      "false_reject_rate": 0.8194084068500259,
+      "accuracy": 0.5895173845355475,
+      "auroc": 0.8579400047773844,
+      "eer": 0.203425012973534,
+      "eer_threshold": 0.9467329978942871
+    },
+    "scope": "Verifier confirmed only; not final policy auto-allow."
+  },
+  "novel_after_enrollment": {
+    "protocol": "Known catalog + enrolled unknown classes; fixed query images across k.",
+    "threshold_note": "Pooled known conformal calibration transferred to novel classes; no class-conditional guarantee for novel. Energy/risk gates disabled because the catalog changed.",
+    "runs": [
+      {
+        "k_shot": 1,
+        "n_query": 836,
+        "n_catalog_classes": 24,
+        "accuracy": 0.5011961722488039,
+        "macro_f1": 0.4877914344464758,
+        "macro_f1_labels": [
+          "Bơ Hass",
+          "Chuối vàng",
+          "Cà chua vàng",
+          "Dưa leo cỡ vừa",
+          "Nho đen",
+          "Táo Fuji",
+          "Ớt chuông xanh"
+        ],
+        "macro_f1_scope": "Novel true classes only; base-class predictions count as false negatives.",
+        "macro_f1_catalog": 0.14227250171355546,
+        "empirical_coverage_transferred_threshold": 0.777511961722488
+      },
+      {
+        "k_shot": 2,
+        "n_query": 836,
+        "n_catalog_classes": 24,
+        "accuracy": 0.5921052631578947,
+        "macro_f1": 0.6532101443079795,
+        "macro_f1_labels": [
+          "Bơ Hass",
+          "Chuối vàng",
+          "Cà chua vàng",
+          "Dưa leo cỡ vừa",
+          "Nho đen",
+          "Táo Fuji",
+          "Ớt chuông xanh"
+        ],
+        "macro_f1_scope": "Novel true classes only; base-class predictions count as false negatives.",
+        "macro_f1_catalog": 0.1905196254231607,
+        "empirical_coverage_transferred_threshold": 0.8720095693779905
+      },
+      {
+        "k_shot": 3,
+        "n_query": 836,
+        "n_catalog_classes": 24,
+        "accuracy": 0.5885167464114832,
+        "macro_f1": 0.6547770586982329,
+        "macro_f1_labels": [
+          "Bơ Hass",
+          "Chuối vàng",
+          "Cà chua vàng",
+          "Dưa leo cỡ vừa",
+          "Nho đen",
+          "Táo Fuji",
+          "Ớt chuông xanh"
+        ],
+        "macro_f1_scope": "Novel true classes only; base-class predictions count as false negatives.",
+        "macro_f1_catalog": 0.19097664212031795,
+        "empirical_coverage_transferred_threshold": 0.9102870813397129
+      },
+      {
+        "k_shot": 5,
+        "n_query": 836,
+        "n_catalog_classes": 24,
+        "accuracy": 0.6818181818181818,
+        "macro_f1": 0.747696666809006,
+        "macro_f1_labels": [
+          "Bơ Hass",
+          "Chuối vàng",
+          "Cà chua vàng",
+          "Dưa leo cỡ vừa",
+          "Nho đen",
+          "Táo Fuji",
+          "Ớt chuông xanh"
+        ],
+        "macro_f1_scope": "Novel true classes only; base-class predictions count as false negatives.",
+        "macro_f1_catalog": 0.2180781944859601,
+        "empirical_coverage_transferred_threshold": 0.9413875598086124
+      }
+    ]
+  },
+  "scenarios": null,
+  "warnings": [
+    "Ngưỡng chỉ được chọn từ known-calib. Khả năng từ chối hàng ngoài danh mục phải được đánh giá trên unknown-test độc lập; không đưa unknown-test vào hiệu chỉnh."
+  ],
+  "reports": {
+    "json": "var\\thesis_v4\\reports\\20261019T155208_efd1c3a2\\evaluation_dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1.json",
+    "markdown": "var\\thesis_v4\\reports\\20261019T155208_efd1c3a2\\evaluation_dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1.md",
+    "predictions": "var\\thesis_v4\\reports\\20261019T155208_efd1c3a2\\evaluation_dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1.predictions.jsonl",
+    "risk_coverage_csv": "var\\thesis_v4\\reports\\20261019T155208_efd1c3a2\\evaluation_dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1.risk_coverage.csv",
+    "risk_coverage_svg": "var\\thesis_v4\\reports\\20261019T155208_efd1c3a2\\evaluation_dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1.risk_coverage.svg",
+    "risk_coverage_png": "var\\thesis_v4\\reports\\20261019T155208_efd1c3a2\\evaluation_dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1.risk_coverage.png"
+  }
+}

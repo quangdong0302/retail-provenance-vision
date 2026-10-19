@@ -1,0 +1,86 @@
+{
+  "n_cases": 12,
+  "stats": {
+    "suppliers": 2,
+    "products": 17,
+    "skus": 17,
+    "lots": 9,
+    "evidence": 16,
+    "trace_events": 9,
+    "decisions": 0
+  },
+  "cases": [
+    {
+      "name": "happy_path",
+      "expected": "allow",
+      "claimed_sku": "Bắp cải trắng",
+      "claimed_lot": "lot_happy"
+    },
+    {
+      "name": "missing_lot",
+      "expected": "assist",
+      "claimed_sku": "Bắp ngô",
+      "claimed_lot": null
+    },
+    {
+      "name": "missing_evidence",
+      "expected": "assist",
+      "claimed_sku": "Chanh màu cam",
+      "claimed_lot": "lot_noevidence"
+    },
+    {
+      "name": "pending_evidence",
+      "expected": "allow_warning",
+      "claimed_sku": "Cà chua bi vàng",
+      "claimed_lot": "lot_pending"
+    },
+    {
+      "name": "expired_lot",
+      "expected": "block",
+      "claimed_sku": "Cà chua hồng",
+      "claimed_lot": "lot_expired"
+    },
+    {
+      "name": "recalled_lot",
+      "expected": "block",
+      "claimed_sku": "Cà chua tim bò",
+      "claimed_lot": "lot_recalled"
+    },
+    {
+      "name": "ticket_switch",
+      "expected": "block",
+      "claimed_sku": "Cà rốt",
+      "claimed_lot": "lot_cheap"
+    },
+    {
+      "name": "unknown_item",
+      "expected": "assist_or_block",
+      "claimed_sku": "Bắp cải trắng",
+      "claimed_lot": "lot_happy"
+    },
+    {
+      "name": "imported_missing_customs",
+      "expected": "assist",
+      "claimed_sku": "Dưa hấu dài",
+      "claimed_lot": "lot_import"
+    },
+    {
+      "name": "same_sku_different_lot",
+      "expected": "block",
+      "claimed_sku": "Bắp cải trắng",
+      "claimed_lot": "lot_same_sku_expired"
+    },
+    {
+      "name": "expired_certificate",
+      "expected": "assist",
+      "claimed_sku": "Bắp cải trắng",
+      "claimed_lot": "lot_expired_certificate"
+    },
+    {
+      "name": "lot_sku_conflict",
+      "expected": "block",
+      "claimed_sku": "Bắp cải trắng",
+      "claimed_lot": "lot_cheap"
+    }
+  ]
+}

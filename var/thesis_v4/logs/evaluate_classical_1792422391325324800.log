@@ -1,0 +1,1 @@
+[eval] encoder=classical2_s128_c8_h16_g3_r32_f8_tta0 splits={'protocol': 'known_unknown_70_30_v1', 'n_train_images': 2878, 'n_validation_images': 1887, 'n_known_classes': 17, 'n_train_classes': 17, 'n_novel_classes': 7, 'n_support_images': 34, 'n_calib_images': 1915, 'n_test_images': 1927, 'n_unknown_calib': 0, 'n_unknown_test': 4200, 'n_novel_support': 35, 'n_novel_query': 836}

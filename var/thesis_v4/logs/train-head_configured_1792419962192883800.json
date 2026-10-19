@@ -1,0 +1,41 @@
+{
+  "best_val_acc": 0.7025472351102604,
+  "best_epoch": 1,
+  "n_train_classes": 17,
+  "n_train_images": 2878,
+  "n_val_classes": 17,
+  "n_novel_development_classes": 11,
+  "n_novel_development_queries": 3332,
+  "in_dim": 384,
+  "out_dim": 384,
+  "backbone_tag": "dinov2_vits14_s336_90f15cb97276985d",
+  "dataset_fingerprint": "dc420dd70c2db61562551644f187199d91f5bf7d179efabc5ae11bc231118e93",
+  "split_fingerprint": "056b87151056b14a78d626ecf1872e75832de813d22ab91b65a0fad83bc87862",
+  "development_fingerprint": "3f1bcd53cf7e13cf4d702bcfbc3e80a7ba6ed7e3c5dc4e7b8eeb68604b648415",
+  "save_path": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\projection_head.pt",
+  "training_config": {
+    "protocol": "catalog_grouped",
+    "seed": 0,
+    "n_way": 17,
+    "k_shot": 2,
+    "q_query": 8,
+    "epochs": 20,
+    "episodes_per_epoch": 300,
+    "lr": 0.0005,
+    "weight_decay": 0.001,
+    "noise_std": 0.01,
+    "head_dropout": 0.15,
+    "temperature": 10,
+    "patience": 5,
+    "device": "cuda",
+    "init_head": null,
+    "prototype_geometry": "normalized_support_mean",
+    "centroids_per_sku": 1,
+    "support_sampling": "Two distinct capture groups when >=3 train groups; separate query group.",
+    "checkpoint_selection": "Mean of known validation and novel-development 2-shot accuracy; epoch zero included; identical prototype geometry in training and inference."
+  },
+  "versions": {
+    "torch": "2.5.1+cu121",
+    "numpy": "2.2.5"
+  }
+}

@@ -1,0 +1,7 @@
+C:\Users\user\.cache\torch\hub\facebookresearch_dinov2_main\dinov2\layers\swiglu_ffn.py:51: UserWarning: xFormers is not available (SwiGLU)
+  warnings.warn("xFormers is not available (SwiGLU)")
+C:\Users\user\.cache\torch\hub\facebookresearch_dinov2_main\dinov2\layers\attention.py:33: UserWarning: xFormers is not available (Attention)
+  warnings.warn("xFormers is not available (Attention)")
+C:\Users\user\.cache\torch\hub\facebookresearch_dinov2_main\dinov2\layers\block.py:40: UserWarning: xFormers is not available (Block)
+  warnings.warn("xFormers is not available (Block)")
+[eval] encoder=dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1 splits={'protocol': 'known_unknown_70_30_v1', 'n_train_images': 2878, 'n_validation_images': 1887, 'n_known_classes': 17, 'n_train_classes': 17, 'n_novel_classes': 7, 'n_support_images': 34, 'n_calib_images': 1915, 'n_test_images': 1927, 'n_unknown_calib': 0, 'n_unknown_test': 4200, 'n_novel_support': 35, 'n_novel_query': 836}

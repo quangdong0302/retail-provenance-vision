@@ -1,0 +1,113 @@
+{
+  "history": [
+    {
+      "epoch": 0,
+      "train_loss": null,
+      "train_acc": null,
+      "val_acc": 0.5552396634329407,
+      "known_catalog_val_acc": 0.6173820879703232,
+      "unseen_class_dev_acc_2shot": 0.49309723889555823,
+      "selection_score": 0.5552396634329407,
+      "lr": 0.0005
+    },
+    {
+      "epoch": 1,
+      "train_loss": 0.17424029273912311,
+      "train_acc": 0.9500230022271474,
+      "val_acc": 0.7025472351102604,
+      "known_catalog_val_acc": 0.7991520932697403,
+      "unseen_class_dev_acc_2shot": 0.6059423769507803,
+      "selection_score": 0.7025472351102604,
+      "lr": 0.0004969220851487844
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.03609659855564435,
+      "train_acc": 0.995598486661911,
+      "val_acc": 0.6850118425748678,
+      "known_catalog_val_acc": 0.8124006359300477,
+      "unseen_class_dev_acc_2shot": 0.5576230492196879,
+      "selection_score": 0.6850118425748678,
+      "lr": 0.0004877641290737884
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.022462873707214993,
+      "train_acc": 0.9980499211947124,
+      "val_acc": 0.6849861566248121,
+      "known_catalog_val_acc": 0.8150503444621092,
+      "unseen_class_dev_acc_2shot": 0.554921968787515,
+      "selection_score": 0.6849861566248121,
+      "lr": 0.00047275163104709196
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.015623334588793418,
+      "train_acc": 0.9989326810836792,
+      "val_acc": 0.6848847647166976,
+      "known_catalog_val_acc": 0.8007419183889772,
+      "unseen_class_dev_acc_2shot": 0.5690276110444178,
+      "selection_score": 0.6848847647166976,
+      "lr": 0.0004522542485937369
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.0131720374757424,
+      "train_acc": 0.9995208865404129,
+      "val_acc": 0.684012794306912,
+      "known_catalog_val_acc": 0.8071012188659248,
+      "unseen_class_dev_acc_2shot": 0.5609243697478992,
+      "selection_score": 0.684012794306912,
+      "lr": 0.00042677669529663686
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.012142575803833704,
+      "train_acc": 0.9992997829119364,
+      "val_acc": 0.672024215091442,
+      "known_catalog_val_acc": 0.8023317435082141,
+      "unseen_class_dev_acc_2shot": 0.5417166866746699,
+      "selection_score": 0.672024215091442,
+      "lr": 0.0003969463130731183
+    }
+  ],
+  "best_val_acc": 0.7025472351102604,
+  "best_epoch": 1,
+  "n_train_classes": 17,
+  "n_train_images": 2878,
+  "n_val_classes": 17,
+  "n_novel_development_classes": 11,
+  "n_novel_development_queries": 3332,
+  "in_dim": 384,
+  "out_dim": 384,
+  "backbone_tag": "dinov2_vits14_s336_90f15cb97276985d",
+  "dataset_fingerprint": "dc420dd70c2db61562551644f187199d91f5bf7d179efabc5ae11bc231118e93",
+  "split_fingerprint": "056b87151056b14a78d626ecf1872e75832de813d22ab91b65a0fad83bc87862",
+  "development_fingerprint": "3f1bcd53cf7e13cf4d702bcfbc3e80a7ba6ed7e3c5dc4e7b8eeb68604b648415",
+  "save_path": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\projection_head.pt",
+  "training_config": {
+    "protocol": "catalog_grouped",
+    "seed": 0,
+    "n_way": 17,
+    "k_shot": 2,
+    "q_query": 8,
+    "epochs": 20,
+    "episodes_per_epoch": 300,
+    "lr": 0.0005,
+    "weight_decay": 0.001,
+    "noise_std": 0.01,
+    "head_dropout": 0.15,
+    "temperature": 10,
+    "patience": 5,
+    "device": "cuda",
+    "init_head": null,
+    "prototype_geometry": "normalized_support_mean",
+    "centroids_per_sku": 1,
+    "support_sampling": "Two distinct capture groups when >=3 train groups; separate query group.",
+    "checkpoint_selection": "Mean of known validation and novel-development 2-shot accuracy; epoch zero included; identical prototype geometry in training and inference."
+  },
+  "versions": {
+    "torch": "2.5.1+cu121",
+    "numpy": "2.2.5"
+  }
+}

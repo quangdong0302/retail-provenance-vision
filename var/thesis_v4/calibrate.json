@@ -1,0 +1,88 @@
+{
+  "encoder": {
+    "tag": "dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1",
+    "dim": 480,
+    "cache_tag": "dinov2_vits14_s336_90f15cb97276985d",
+    "variant": "vits14",
+    "backbone_dim": 384,
+    "image_size": 336,
+    "center_crop": true,
+    "crop_ratio": 0.875,
+    "weights_sha256": "190859844203f530e178165b42ed96c811144b0c1945d8b8e8306e68e468ab48",
+    "resize_mode": "pad",
+    "use_tta": false,
+    "head_metadata": {
+      "dataset_fingerprint": "dc420dd70c2db61562551644f187199d91f5bf7d179efabc5ae11bc231118e93",
+      "split_fingerprint": "056b87151056b14a78d626ecf1872e75832de813d22ab91b65a0fad83bc87862",
+      "development_fingerprint": "3f1bcd53cf7e13cf4d702bcfbc3e80a7ba6ed7e3c5dc4e7b8eeb68604b648415"
+    },
+    "device": "cuda",
+    "projection_head": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\projection_head.pt",
+    "catalog_backend": "prototype",
+    "color_weight": 0.3,
+    "color_dim": 96,
+    "color_cache": {
+      "tag": "foreground_hs128_h24_s4_hellinger_v1",
+      "dim": 96,
+      "n_entries": 4963,
+      "path": "var\\embed_cache\\foreground_hs128_h24_s4_hellinger_v1-02cbe15c70.npz",
+      "hits": 0,
+      "misses": 4963,
+      "disk_bytes": 3494700
+    }
+  },
+  "bank": {
+    "n_skus": 17,
+    "catalog_backend": "prototype",
+    "score_semantics": "euclidean_distance",
+    "encoder_tag": "dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1",
+    "dim": 480,
+    "centroids_per_sku": 1,
+    "total_shots": 34,
+    "mean_intra_spread": 0.43325861061320586,
+    "most_inconsistent_skus": [
+      {
+        "sku_id": "Táo Red Delicious",
+        "intra_spread": 0.6987,
+        "n_shots": 2
+      },
+      {
+        "sku_id": "Cà rốt",
+        "intra_spread": 0.6076,
+        "n_shots": 2
+      },
+      {
+        "sku_id": "Ớt chuông vàng",
+        "intra_spread": 0.5844,
+        "n_shots": 2
+      },
+      {
+        "sku_id": "Xoài",
+        "intra_spread": 0.5528,
+        "n_shots": 2
+      },
+      {
+        "sku_id": "Hành tây tím",
+        "intra_spread": 0.5177,
+        "n_shots": 2
+      }
+    ]
+  },
+  "calibration": {
+    "known_recall_on_calib": 0.8,
+    "unknown_reject_rate_on_calib": 0.0,
+    "target_known_recall": 0.8,
+    "n_known_calib": 1915,
+    "n_unknown_calib": 0,
+    "risk_calibration": "six_extra_cal",
+    "n_extra_development": 3014
+  },
+  "warnings": [
+    "Ngưỡng chỉ được chọn từ known-calib. Khả năng từ chối hàng ngoài danh mục phải được đánh giá trên unknown-test độc lập; không đưa unknown-test vào hiệu chỉnh."
+  ],
+  "test_images_embedded": 0,
+  "saved": {
+    "bank": "var\\thesis_v4\\prototypes.json",
+    "calibration": "var\\thesis_v4\\calibration.json"
+  }
+}

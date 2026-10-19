@@ -1,0 +1,14 @@
+C:\Users\user\.cache\torch\hub\facebookresearch_dinov2_main\dinov2\layers\swiglu_ffn.py:51: UserWarning: xFormers is not available (SwiGLU)
+  warnings.warn("xFormers is not available (SwiGLU)")
+C:\Users\user\.cache\torch\hub\facebookresearch_dinov2_main\dinov2\layers\attention.py:33: UserWarning: xFormers is not available (Attention)
+  warnings.warn("xFormers is not available (Attention)")
+C:\Users\user\.cache\torch\hub\facebookresearch_dinov2_main\dinov2\layers\block.py:40: UserWarning: xFormers is not available (Block)
+  warnings.warn("xFormers is not available (Block)")
+[train-head] splits={'protocol': 'known_unknown_70_30_v1', 'n_train_images': 2878, 'n_validation_images': 1887, 'n_known_classes': 17, 'n_train_classes': 17, 'n_novel_classes': 7, 'n_support_images': 34, 'n_calib_images': 1915, 'n_test_images': 1927, 'n_unknown_calib': 0, 'n_unknown_test': 4200, 'n_novel_support': 35, 'n_novel_query': 836}
+[catalog-train] {'epoch': 0, 'train_loss': None, 'train_acc': None, 'val_acc': 0.5552396634329407, 'known_catalog_val_acc': 0.6173820879703232, 'unseen_class_dev_acc_2shot': 0.49309723889555823, 'selection_score': 0.5552396634329407, 'lr': 0.0005}
+[catalog-train] {'epoch': 1, 'train_loss': 0.17424029273912311, 'train_acc': 0.9500230022271474, 'val_acc': 0.7025472351102604, 'known_catalog_val_acc': 0.7991520932697403, 'unseen_class_dev_acc_2shot': 0.6059423769507803, 'selection_score': 0.7025472351102604, 'lr': 0.0004969220851487844}
+[catalog-train] {'epoch': 2, 'train_loss': 0.03609659855564435, 'train_acc': 0.995598486661911, 'val_acc': 0.6850118425748678, 'known_catalog_val_acc': 0.8124006359300477, 'unseen_class_dev_acc_2shot': 0.5576230492196879, 'selection_score': 0.6850118425748678, 'lr': 0.0004877641290737884}
+[catalog-train] {'epoch': 3, 'train_loss': 0.022462873707214993, 'train_acc': 0.9980499211947124, 'val_acc': 0.6849861566248121, 'known_catalog_val_acc': 0.8150503444621092, 'unseen_class_dev_acc_2shot': 0.554921968787515, 'selection_score': 0.6849861566248121, 'lr': 0.00047275163104709196}
+[catalog-train] {'epoch': 4, 'train_loss': 0.015623334588793418, 'train_acc': 0.9989326810836792, 'val_acc': 0.6848847647166976, 'known_catalog_val_acc': 0.8007419183889772, 'unseen_class_dev_acc_2shot': 0.5690276110444178, 'selection_score': 0.6848847647166976, 'lr': 0.0004522542485937369}
+[catalog-train] {'epoch': 5, 'train_loss': 0.0131720374757424, 'train_acc': 0.9995208865404129, 'val_acc': 0.684012794306912, 'known_catalog_val_acc': 0.8071012188659248, 'unseen_class_dev_acc_2shot': 0.5609243697478992, 'selection_score': 0.684012794306912, 'lr': 0.00042677669529663686}
+[catalog-train] {'epoch': 6, 'train_loss': 0.012142575803833704, 'train_acc': 0.9992997829119364, 'val_acc': 0.672024215091442, 'known_catalog_val_acc': 0.8023317435082141, 'unseen_class_dev_acc_2shot': 0.5417166866746699, 'selection_score': 0.672024215091442, 'lr': 0.0003969463130731183}

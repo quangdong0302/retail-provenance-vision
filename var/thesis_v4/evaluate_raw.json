@@ -1,0 +1,202 @@
+{
+  "encoder": {
+    "tag": "dinov2_vits14_s336_90f15cb97276985d_raw_tta0",
+    "dim": 384,
+    "cache_tag": "dinov2_vits14_s336_90f15cb97276985d",
+    "variant": "vits14",
+    "backbone_dim": 384,
+    "image_size": 336,
+    "center_crop": true,
+    "crop_ratio": 0.875,
+    "weights_sha256": "190859844203f530e178165b42ed96c811144b0c1945d8b8e8306e68e468ab48",
+    "resize_mode": "pad",
+    "use_tta": false,
+    "head_metadata": {},
+    "device": "cuda",
+    "projection_head": null
+  },
+  "closed_set": {
+    "accuracy_all_classes": 0.6113129216398547,
+    "macro_f1_all_classes": 0.6402615546519506,
+    "macro_f1_with_unknown": 0.45822858826272345,
+    "n_test_images": 1927
+  },
+  "open_set": {
+    "threshold": 0.8251580574626868,
+    "known_recall": 0.7758173326414115,
+    "unknown_reject_rate": 0.5152380952380953,
+    "false_accept_rate": 0.4847619047619048,
+    "auroc": 0.713549064669978,
+    "n_known": 1927,
+    "n_unknown": 4200,
+    "score": "energy",
+    "distance_baseline": {
+      "threshold": 0.9331231117248535,
+      "known_recall": 0.7939802802283342,
+      "unknown_reject_rate": 0.5395238095238095,
+      "false_accept_rate": 0.4604761904761905,
+      "auroc": 0.7260063137865421,
+      "n_known": 1927,
+      "n_unknown": 4200,
+      "fpr_at_95tpr": {
+        "threshold": 1.0711538791656494,
+        "tpr": 0.9501816294758693,
+        "fpr": 0.7066666666666667
+      }
+    }
+  },
+  "selective": {
+    "status_distribution": {
+      "ambiguous": 1376,
+      "unknown": 432,
+      "match": 119
+    },
+    "mean_prediction_set_size": 4.715101193565127,
+    "empirical_coverage": 0.8666320705760249,
+    "empirical_coverage_after_ood": 0.7057602490918526,
+    "decision_set_label_coverage": 0.7057602490918526,
+    "set_metrics_scope": "Raw conformal sets before Energy/risk gates; combined gate has no conformal coverage guarantee.",
+    "nonempty_set_rate": 0.97145822522055,
+    "singleton_accuracy": 0.6722689075630253,
+    "n_singleton": 119,
+    "n_singleton_conformal_before_gates": 355,
+    "target_coverage": 0.9,
+    "abstention_rate": 0.9382459782044629,
+    "unknown_items_correctly_rejected": 0.5152380952380953,
+    "unknown_auto_accept_rate": 0.0033333333333333335,
+    "unknown_handoff_rate": 0.9966666666666667,
+    "coverage_at_risk_1pct": 0.005708354955889984,
+    "coverage_at_risk_5pct": 0.03009859885832901,
+    "coverage_at_risk_10pct": 0.04878048780487805,
+    "risk_coverage_scope": "Known-test diagnostic sweep; never used to select the deployed threshold.",
+    "operating_point_known": {
+      "target_risk": 0.04,
+      "coverage": 0.06175402179553711,
+      "selective_risk": 0.32773109243697474,
+      "n_answered": 119,
+      "target_met_on_test": false
+    },
+    "operating_point_known_and_unknown": {
+      "target_risk": 0.04,
+      "coverage": 0.02170719764974702,
+      "selective_risk": 0.3984962406015038,
+      "n_answered": 133,
+      "target_met_on_test": false
+    }
+  },
+  "verification": {
+    "n_genuine": 1927,
+    "n_impostor": 1927,
+    "false_accept_rate": 0.0005189413596263622,
+    "false_reject_rate": 0.958484691229891,
+    "accuracy": 0.5204981837052413,
+    "auroc": 0.8974878067631498,
+    "eer": 0.19927348209652307,
+    "eer_threshold": 1.0363821983337402,
+    "nearest_wrong_claim": {
+      "n_genuine": 1927,
+      "n_impostor": 1927,
+      "false_accept_rate": 0.020238713025428127,
+      "false_reject_rate": 0.958484691229891,
+      "accuracy": 0.5106382978723404,
+      "auroc": 0.5643185669785791,
+      "eer": 0.467047223663726,
+      "eer_threshold": 0.9020485877990723
+    },
+    "scope": "Verifier confirmed only; not final policy auto-allow."
+  },
+  "novel_after_enrollment": {
+    "protocol": "Known catalog + enrolled unknown classes; fixed query images across k.",
+    "threshold_note": "Pooled known conformal calibration transferred to novel classes; no class-conditional guarantee for novel. Energy/risk gates disabled because the catalog changed.",
+    "runs": [
+      {
+        "k_shot": 1,
+        "n_query": 836,
+        "n_catalog_classes": 24,
+        "accuracy": 0.40311004784689,
+        "macro_f1": 0.4865948190269992,
+        "macro_f1_labels": [
+          "Bơ Hass",
+          "Chuối vàng",
+          "Cà chua vàng",
+          "Dưa leo cỡ vừa",
+          "Nho đen",
+          "Táo Fuji",
+          "Ớt chuông xanh"
+        ],
+        "macro_f1_scope": "Novel true classes only; base-class predictions count as false negatives.",
+        "macro_f1_catalog": 0.14192348888287476,
+        "empirical_coverage_transferred_threshold": 0.5717703349282297
+      },
+      {
+        "k_shot": 2,
+        "n_query": 836,
+        "n_catalog_classes": 24,
+        "accuracy": 0.5502392344497608,
+        "macro_f1": 0.5950638495407092,
+        "macro_f1_labels": [
+          "Bơ Hass",
+          "Chuối vàng",
+          "Cà chua vàng",
+          "Dưa leo cỡ vừa",
+          "Nho đen",
+          "Táo Fuji",
+          "Ớt chuông xanh"
+        ],
+        "macro_f1_scope": "Novel true classes only; base-class predictions count as false negatives.",
+        "macro_f1_catalog": 0.17356028944937352,
+        "empirical_coverage_transferred_threshold": 0.9150717703349283
+      },
+      {
+        "k_shot": 3,
+        "n_query": 836,
+        "n_catalog_classes": 24,
+        "accuracy": 0.5358851674641149,
+        "macro_f1": 0.5778528071401083,
+        "macro_f1_labels": [
+          "Bơ Hass",
+          "Chuối vàng",
+          "Cà chua vàng",
+          "Dưa leo cỡ vừa",
+          "Nho đen",
+          "Táo Fuji",
+          "Ớt chuông xanh"
+        ],
+        "macro_f1_scope": "Novel true classes only; base-class predictions count as false negatives.",
+        "macro_f1_catalog": 0.1685404020825316,
+        "empirical_coverage_transferred_threshold": 0.8779904306220095
+      },
+      {
+        "k_shot": 5,
+        "n_query": 836,
+        "n_catalog_classes": 24,
+        "accuracy": 0.5358851674641149,
+        "macro_f1": 0.6068272544641637,
+        "macro_f1_labels": [
+          "Bơ Hass",
+          "Chuối vàng",
+          "Cà chua vàng",
+          "Dưa leo cỡ vừa",
+          "Nho đen",
+          "Táo Fuji",
+          "Ớt chuông xanh"
+        ],
+        "macro_f1_scope": "Novel true classes only; base-class predictions count as false negatives.",
+        "macro_f1_catalog": 0.17699128255204777,
+        "empirical_coverage_transferred_threshold": 0.8456937799043063
+      }
+    ]
+  },
+  "scenarios": null,
+  "warnings": [
+    "Ngưỡng chỉ được chọn từ known-calib. Khả năng từ chối hàng ngoài danh mục phải được đánh giá trên unknown-test độc lập; không đưa unknown-test vào hiệu chỉnh."
+  ],
+  "reports": {
+    "json": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\reports\\baselines\\raw\\20261019T151739_27468f03\\evaluation_dinov2_vits14_s336_90f15cb97276985d_raw_tta0.json",
+    "markdown": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\reports\\baselines\\raw\\20261019T151739_27468f03\\evaluation_dinov2_vits14_s336_90f15cb97276985d_raw_tta0.md",
+    "predictions": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\reports\\baselines\\raw\\20261019T151739_27468f03\\evaluation_dinov2_vits14_s336_90f15cb97276985d_raw_tta0.predictions.jsonl",
+    "risk_coverage_csv": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\reports\\baselines\\raw\\20261019T151739_27468f03\\evaluation_dinov2_vits14_s336_90f15cb97276985d_raw_tta0.risk_coverage.csv",
+    "risk_coverage_svg": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\reports\\baselines\\raw\\20261019T151739_27468f03\\evaluation_dinov2_vits14_s336_90f15cb97276985d_raw_tta0.risk_coverage.svg",
+    "risk_coverage_png": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\reports\\baselines\\raw\\20261019T151739_27468f03\\evaluation_dinov2_vits14_s336_90f15cb97276985d_raw_tta0.risk_coverage.png"
+  }
+}

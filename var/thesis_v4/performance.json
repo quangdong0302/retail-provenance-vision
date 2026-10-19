@@ -1,0 +1,324 @@
+{
+  "hardware": {
+    "os": "Windows-10-10.0.26200-SP0",
+    "cpu": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+    "logical_cpu_count": 16,
+    "encoder": {
+      "tag": "dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1",
+      "dim": 480,
+      "cache_tag": "dinov2_vits14_s336_90f15cb97276985d",
+      "variant": "vits14",
+      "backbone_dim": 384,
+      "image_size": 336,
+      "center_crop": true,
+      "crop_ratio": 0.875,
+      "weights_sha256": "190859844203f530e178165b42ed96c811144b0c1945d8b8e8306e68e468ab48",
+      "resize_mode": "pad",
+      "use_tta": false,
+      "head_metadata": {
+        "dataset_fingerprint": "dc420dd70c2db61562551644f187199d91f5bf7d179efabc5ae11bc231118e93",
+        "split_fingerprint": "056b87151056b14a78d626ecf1872e75832de813d22ab91b65a0fad83bc87862",
+        "development_fingerprint": "3f1bcd53cf7e13cf4d702bcfbc3e80a7ba6ed7e3c5dc4e7b8eeb68604b648415"
+      },
+      "device": "cuda",
+      "projection_head": "D:\\Documents\\retail-provenance-vision-main\\var\\thesis_v4\\projection_head.pt",
+      "catalog_backend": "prototype",
+      "color_weight": 0.3,
+      "color_dim": 96,
+      "color_cache": {
+        "tag": "foreground_hs128_h24_s4_hellinger_v1",
+        "dim": 96,
+        "n_entries": 18624,
+        "path": "var\\embed_cache\\foreground_hs128_h24_s4_hellinger_v1-02cbe15c70.npz",
+        "hits": 0,
+        "misses": 0,
+        "disk_bytes": 13112044
+      }
+    },
+    "n_catalog_classes": 17,
+    "n_centroids": 17,
+    "use_tta": false,
+    "ram_gib": 15.710990905761719,
+    "torch_version": "2.5.1+cu121",
+    "cuda_available": true,
+    "torch_threads": 2,
+    "gpu": "NVIDIA GeForce RTX 3050 Ti Laptop GPU"
+  },
+  "modes": {
+    "uncached": {
+      "summary": {
+        "vision_search": {
+          "n": 20,
+          "mean_ms": 82.91288499985967,
+          "p50_ms": 82.30984999954671,
+          "p95_ms": 87.09907999918869,
+          "p99_ms": 90.35613600057331,
+          "budget_ms": 150.0,
+          "meets_budget_p95": true
+        },
+        "policy_lookup": {
+          "n": 20,
+          "mean_ms": 0.34800500006895163,
+          "p50_ms": 0.3100500007349183,
+          "p95_ms": 0.5432649992144434,
+          "p99_ms": 0.556412999794702,
+          "budget_ms": 50.0,
+          "meets_budget_p95": true
+        },
+        "total": {
+          "n": 20,
+          "mean_ms": 86.11424500040812,
+          "p50_ms": 85.29790000011417,
+          "p95_ms": 90.37707500056058,
+          "p99_ms": 93.76933500016094,
+          "budget_ms": 300.0,
+          "meets_budget_p95": true
+        }
+      },
+      "samples_ms": [
+        {
+          "vision_search": 91.17040000091947,
+          "policy_lookup": 0.34609999966050964,
+          "total": 94.61740000006102
+        },
+        {
+          "vision_search": 81.4381999989564,
+          "policy_lookup": 0.28449999990698416,
+          "total": 84.76040000095963
+        },
+        {
+          "vision_search": 84.8599999990256,
+          "policy_lookup": 0.29549999999289867,
+          "total": 88.07340000021213
+        },
+        {
+          "vision_search": 78.9996000003157,
+          "policy_lookup": 0.3076999983022688,
+          "total": 82.6641000003292
+        },
+        {
+          "vision_search": 83.61420000073849,
+          "policy_lookup": 0.2922000003309222,
+          "total": 86.56069999960891
+        },
+        {
+          "vision_search": 79.96800000000803,
+          "policy_lookup": 0.30870000045979396,
+          "total": 82.96359999985725
+        },
+        {
+          "vision_search": 80.87349999914295,
+          "policy_lookup": 0.44209999941813294,
+          "total": 84.00579999943147
+        },
+        {
+          "vision_search": 79.71550000002026,
+          "policy_lookup": 0.3576000017346814,
+          "total": 83.3559000002424
+        },
+        {
+          "vision_search": 83.24010000069393,
+          "policy_lookup": 0.3330999988975236,
+          "total": 87.07000000140397
+        },
+        {
+          "vision_search": 80.66189999954076,
+          "policy_lookup": 0.41510000119160395,
+          "total": 84.70480000141833
+        },
+        {
+          "vision_search": 81.6768000004231,
+          "policy_lookup": 0.28420000126061495,
+          "total": 84.26880000115489
+        },
+        {
+          "vision_search": 84.02939999905357,
+          "policy_lookup": 0.3080000005866168,
+          "total": 86.43840000149794
+        },
+        {
+          "vision_search": 81.31649999995716,
+          "policy_lookup": 0.3114000010100426,
+          "total": 84.44760000020324
+        },
+        {
+          "vision_search": 84.28290000119887,
+          "policy_lookup": 0.29320000066945795,
+          "total": 87.47609999954875
+        },
+        {
+          "vision_search": 85.53879999999481,
+          "policy_lookup": 0.3594999998313142,
+          "total": 89.359700001296
+        },
+        {
+          "vision_search": 86.8847999990976,
+          "policy_lookup": 0.3054999997402774,
+          "total": 90.15390000058687
+        },
+        {
+          "vision_search": 82.94289999867033,
+          "policy_lookup": 0.29290000020409934,
+          "total": 85.3330999998434
+        },
+        {
+          "vision_search": 79.19620000029681,
+          "policy_lookup": 0.5423999991762685,
+          "total": 82.1656999996776
+        },
+        {
+          "vision_search": 86.20149999842397,
+          "policy_lookup": 0.3206999990652548,
+          "total": 88.6028000004444
+        },
+        {
+          "vision_search": 81.6465000007156,
+          "policy_lookup": 0.5596999999397667,
+          "total": 85.26270000038494
+        }
+      ],
+      "audit_valid": true
+    },
+    "cached": {
+      "summary": {
+        "vision_search": {
+          "n": 20,
+          "mean_ms": 5.112680000092951,
+          "p50_ms": 5.158750000191503,
+          "p95_ms": 6.047389999548614,
+          "p99_ms": 6.0593979997429415,
+          "budget_ms": 150.0,
+          "meets_budget_p95": true
+        },
+        "policy_lookup": {
+          "n": 20,
+          "mean_ms": 0.3052999995816208,
+          "p50_ms": 0.28509999992820667,
+          "p95_ms": 0.4020499992293481,
+          "p99_ms": 0.45448999901054765,
+          "budget_ms": 50.0,
+          "meets_budget_p95": true
+        },
+        "total": {
+          "n": 20,
+          "mean_ms": 7.625775000269641,
+          "p50_ms": 7.666550000976713,
+          "p95_ms": 8.800215000610478,
+          "p99_ms": 9.04820299912899,
+          "budget_ms": 300.0,
+          "meets_budget_p95": true
+        }
+      },
+      "samples_ms": [
+        {
+          "vision_search": 4.9261000003753,
+          "policy_lookup": 0.30049999986658804,
+          "total": 7.046500000797096
+        },
+        {
+          "vision_search": 4.367700001239427,
+          "policy_lookup": 0.3985999992437428,
+          "total": 7.393699999738601
+        },
+        {
+          "vision_search": 5.537900000490481,
+          "policy_lookup": 0.3245999996579485,
+          "total": 8.188499999960186
+        },
+        {
+          "vision_search": 6.002100000841892,
+          "policy_lookup": 0.29659999927389435,
+          "total": 8.256500001152745
+        },
+        {
+          "vision_search": 5.506900000909809,
+          "policy_lookup": 0.27380000028642826,
+          "total": 7.64300000082585
+        },
+        {
+          "vision_search": 5.322699998941971,
+          "policy_lookup": 0.2776000001176726,
+          "total": 7.903200001237565
+        },
+        {
+          "vision_search": 4.3138000000908505,
+          "policy_lookup": 0.255299999480485,
+          "total": 6.60990000142192
+        },
+        {
+          "vision_search": 4.12999999934982,
+          "policy_lookup": 0.23709999913990032,
+          "total": 6.159599999591592
+        },
+        {
+          "vision_search": 6.062399999791523,
+          "policy_lookup": 0.4675999989558477,
+          "total": 8.783900000707945
+        },
+        {
+          "vision_search": 5.45830000010028,
+          "policy_lookup": 0.28449999990698416,
+          "total": 7.9795000001468
+        },
+        {
+          "vision_search": 4.44950000019162,
+          "policy_lookup": 0.296499998512445,
+          "total": 7.469299998774659
+        },
+        {
+          "vision_search": 5.172199998924043,
+          "policy_lookup": 0.2792999985103961,
+          "total": 7.363200000327197
+        },
+        {
+          "vision_search": 5.145300001458963,
+          "policy_lookup": 0.2575999988039257,
+          "total": 7.012300000496907
+        },
+        {
+          "vision_search": 4.919299999528448,
+          "policy_lookup": 0.39139999898907263,
+          "total": 7.770000000164146
+        },
+        {
+          "vision_search": 4.774600000018836,
+          "policy_lookup": 0.2542000001994893,
+          "total": 7.2481000006519025
+        },
+        {
+          "vision_search": 4.695499999797903,
+          "policy_lookup": 0.2856999999494292,
+          "total": 7.6901000011275755
+        },
+        {
+          "vision_search": 5.81160000001546,
+          "policy_lookup": 0.3797000008489704,
+          "total": 8.628899999166606
+        },
+        {
+          "vision_search": 6.046599999535829,
+          "policy_lookup": 0.3195999997842591,
+          "total": 9.110199998758617
+        },
+        {
+          "vision_search": 5.393900000854046,
+          "policy_lookup": 0.2829000004567206,
+          "total": 7.692999999562744
+        },
+        {
+          "vision_search": 4.21719999940251,
+          "policy_lookup": 0.24289999964821618,
+          "total": 6.566100000782171
+        }
+      ],
+      "audit_valid": true
+    }
+  },
+  "warmup": 3,
+  "n_images": 5,
+  "batch_size": 1,
+  "claimed_sku": "Bắp cải trắng",
+  "claimed_lot": "lot_happy",
+  "scope": "Warm model, serial CheckoutService including DB/audit writes; excludes camera, HTTP upload and model startup.",
+  "target_pos": "Proposed: x86-64 CPU >=4 cores, RAM 16 GB, SSD, NVIDIA GPU >=4 GB; dinov2 vits14 336px. Validate on the actual POS."
+}

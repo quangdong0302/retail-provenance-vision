@@ -1,0 +1,12 @@
+{
+  "n": 7534,
+  "classes": 14,
+  "false_auto_accept": 0.0034510220334483675,
+  "unknown_reject": 0.6061852933368729,
+  "handoff": 0.9965489779665516,
+  "encoder_tag": "dinov2_vits14_s336_90f15cb97276985d_proj384_35d5872bc9167e3c_tta0_prototype_hs96w0.3_v1",
+  "bank_fingerprint": "74f5ae480f70ba9916659941d29ba6ad6a021ecb7733f4803d6b1e6af58dbd9e",
+  "checkpoint_sha256": "35d5872bc9167e3c6f0b836efdf5c3c04d238c2f46366b4221049224a3a089ca",
+  "evaluation_scope": "14 frozen extra-holdout classes; development/reserved excluded",
+  "partition_fingerprint": "3f1bcd53cf7e13cf4d702bcfbc3e80a7ba6ed7e3c5dc4e7b8eeb68604b648415"
+}

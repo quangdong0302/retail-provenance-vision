@@ -1,0 +1,12 @@
+{
+  "db": "var\\thesis_v4\\rpv.db",
+  "stats": {
+    "suppliers": 0,
+    "products": 0,
+    "skus": 0,
+    "lots": 0,
+    "evidence": 0,
+    "trace_events": 0,
+    "decisions": 0
+  }
+}
