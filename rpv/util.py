@@ -1,17 +1,13 @@
-"""Tiện ích dùng chung — hash ổn định và JSON an toàn.
+"""Hash ổn định và xử lý JSON.
 
-Hai vấn đề nhỏ nhưng đã gây lỗi thật trong dự án này, nên được đưa về một chỗ:
+``hash()`` của Python thay đổi theo PYTHONHASHSEED giữa các tiến trình.
+``stable_hash_int`` và ``stable_hash_hex`` dùng BLAKE2b để giữ kết quả chọn
+mẫu và ID ổn định giữa các lượt chạy.
 
-* ``hash()`` của Python được RANDOM HOÁ theo từng tiến trình (PYTHONHASHSEED).
-  Dùng nó để chọn mẫu đánh giá hay để sinh ID nghĩa là chạy hai lần cho hai kết
-  quả khác nhau — đúng loại lỗi phá tính tái lập mà không bao giờ crash.
-  ``stable_hash_int`` / ``stable_hash_hex`` thay thế, dựa trên BLAKE2b.
-
-* ``json.dumps`` mặc định cho phép ghi ``NaN`` / ``Infinity``. Đây KHÔNG phải
-  JSON hợp lệ: ``json.loads`` của Python đọc được, nhưng client khác
-  (JavaScript, Go, jq nghiêm ngặt) sẽ lỗi. Hệ thống này sinh ``inf`` một cách
-  hợp lý (khoảng cách khi danh mục rỗng, ngưỡng khi chưa hiệu chỉnh), nên phải
-  làm sạch ở biên đầu ra thay vì cấm ``inf`` trong tính toán.
+``json.dumps`` mặc định cho phép NaN và Infinity, trong khi đây không phải
+giá trị JSON hợp lệ. Python đọc được nhưng các client khác có thể báo lỗi.
+Khoảng cách khi danh mục rỗng hoặc ngưỡng chưa hiệu chỉnh có thể là inf;
+các giá trị này được xử lý lúc xuất JSON, giữ nguyên trong tính toán.
 """
 from __future__ import annotations
 
@@ -25,12 +21,9 @@ _SEP = "\x1f"
 
 
 def log(*parts: Any) -> None:
-    """In tiến trình ra **stderr**.
-
-    stdout của CLI phải là JSON thuần để nối được với ``jq`` hay đọc bằng script.
-    Trộn log tiến trình vào stdout làm mọi lệnh dạng
-    ``python -m rpv.cli calibrate | jq .closed_set`` thất bại — một chi tiết nhỏ
-    nhưng là khác biệt giữa "có CLI" và "CLI dùng được".
+    """Ghi tiến trình ra stderr, giữ stdout của CLI là JSON.
+    Các lệnh như ``python -m rpv.cli calibrate | jq .closed_set``
+    có thể đọc trực tiếp kết quả mà không lẫn log.
     """
     print(*parts, file=sys.stderr, flush=True)
 
@@ -51,10 +44,8 @@ def stable_hash_hex(*parts: Any, length: int = 64) -> str:
 
 
 def json_safe(obj: Any) -> Any:
-    """Đệ quy thay ``NaN``/``±Infinity`` bằng ``None`` để JSON luôn hợp lệ.
-
-    Giữ nguyên mọi giá trị khác: không làm tròn, không đổi kiểu — báo cáo khoa
-    học không được sửa số liệu ở bước ghi file.
+    """Thay đệ quy NaN và ±Infinity bằng None để xuất JSON hợp lệ.
+    Các giá trị khác giữ nguyên, không làm tròn hay đổi kiểu khi ghi báo cáo.
     """
     if isinstance(obj, bool):
         return obj

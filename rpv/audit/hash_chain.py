@@ -1,23 +1,18 @@
-"""Audit trail dạng hash chain (append-only).
+"""Nhật ký quyết định dạng JSONL, liên kết bằng hash.
 
-Vì sao cần trong một hệ thống kiểm chứng nguồn gốc: nếu ai cũng có thể sửa lịch
-sử quyết định, thì "hệ thống kiểm chứng" chỉ là lời hứa. Mỗi bản ghi chứa hash
-của bản ghi trước, nên sửa/xoá một dòng ở giữa sẽ làm đứt chuỗi và bị
-``verify_chain`` phát hiện ngay.
+Mỗi bản ghi chứa hash của bản ghi trước. Sửa hoặc xóa một dòng ở giữa
+làm đứt chuỗi; ``verify_chain`` kiểm tra các liên kết này.
 
-Đây KHÔNG phải blockchain và luận văn không nên gọi nó như vậy: không có đồng
-thuận phân tán, chỉ có tính toàn vẹn tuần tự trong phạm vi một cửa hàng — đúng
-mức cần thiết cho bài toán này.
+Hash chain kiểm tra tính toàn vẹn tuần tự trong một cửa hàng, không có
+đồng thuận phân tán như blockchain.
 
-Hai chi tiết hiện thực đáng nói:
+``append`` đọc phần đuôi file và cache bản ghi cuối. Kích thước file được
+kiểm tra để nhận biết khi tiến trình khác ghi thêm. Cách đọc lại toàn bộ
+file ở mỗi lần ghi trước đây tốn O(N^2) lượt đọc cho N bản ghi.
 
-* ``append`` không đọc lại toàn bộ file để tìm bản ghi cuối. Bản trước làm vậy
-  nên ghi N bản ghi tốn O(N^2) lượt đọc — chạy vài nghìn giao dịch là thấy ngay.
-  Ở đây phần đuôi file được đọc một lần và cache lại, kèm kiểm tra kích thước
-  file để phát hiện tiến trình khác vừa ghi thêm.
-* ``append`` giữ khoá thread và khoá liên tiến trình từ trước khi đọc đuôi
-  đến sau ``fsync``. API và demo phải dùng chung file log và file ``.lock``
-  trên cùng volume. Không xoá file khoá khi còn tiến trình đang sử dụng.
+Khóa thread và khóa liên tiến trình được giữ từ lúc đọc đuôi đến sau
+``fsync``. API và demo dùng chung file log và file ``.lock`` trên cùng
+volume. File khóa được giữ lại trong suốt thời gian có tiến trình sử dụng.
 """
 from __future__ import annotations
 
@@ -34,8 +29,9 @@ from rpv.file_lock import file_lock as _process_lock, path_lock as _path_lock
 GENESIS = "0" * 64
 _TAIL_BYTES = 1 << 16
 def _canonical(payload: Any) -> str:
-    """Chuẩn hoá JSON trước khi hash: sort_keys + separators cố định. Không có
-    bước này, cùng một dữ liệu hash ra hai kết quả khác nhau tuỳ thứ tự khoá."""
+    """Chuẩn hóa JSON bằng sort_keys và separators cố định trước khi hash.
+    Thứ tự khóa khác nhau không làm thay đổi hash của cùng dữ liệu.
+    """
     return json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
@@ -76,8 +72,8 @@ class AuditLog:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
             self.path.touch()
-        # Mọi instance trong cùng process dùng chung khoá theo đường dẫn. API có
-        # service log và status-change log riêng, nên khoá theo instance là sai.
+        # Khóa theo đường dẫn dùng chung cho các instance trong một process,
+        # gồm service log và status-change log của API.
         self._lock = _path_lock(self.path)
         self._process_lock_path = self.path.with_name(self.path.name + ".lock")
         self._head: Optional[AuditEntry] = None

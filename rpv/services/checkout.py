@@ -1,10 +1,9 @@
-"""Orchestrator: một lượt quầy thanh toán từ đầu đến cuối.
+"""Xử lý một lượt kiểm tra tại quầy.
 
-    ảnh (+ mặt hàng khai báo) -> thị giác -> hồ sơ lô -> policy -> audit -> phản hồi
+Ảnh và SKU khai báo -> thị giác -> hồ sơ lô -> policy -> audit -> phản hồi.
 
-Toàn bộ nghiệp vụ nằm ở lớp này, KHÔNG nằm trong API hay giao diện. Nhờ vậy cùng
-một logic được dùng cho FastAPI, demo Gradio, CLI và test tự động — và số liệu
-trong luận văn đo đúng thứ chạy ở demo.
+FastAPI, Gradio, CLI và test dùng chung lớp này. Nghiệp vụ nằm tại service,
+API và giao diện nhận đầu vào rồi chuyển kết quả cho người sử dụng.
 """
 from __future__ import annotations
 
@@ -122,11 +121,11 @@ class CheckoutService:
                 operator: str = "",
                 enrich: bool = False,
                 ) -> CheckoutResponse:
-        """Một lượt quầy.
+        """Một lượt kiểm tra tại quầy.
 
-        ``claimed_sku=None`` là chế độ nhận diện tự do (hệ thống tự đề xuất mặt
-        hàng). Có ``claimed_sku`` là chế độ kiểm chứng lời khai — chế độ đúng của
-        quầy tự thanh toán và là chế độ được đánh giá chính trong luận văn.
+        ``claimed_sku=None`` dùng cho nhận diện tự do và đề xuất mặt hàng.
+        Khi có ``claimed_sku``, hệ thống kiểm chứng SKU đã khai; đây là chế độ
+        đánh giá chính cho quầy tự thanh toán.
         """
         started = perf_counter()
         self.refresh_catalog()
@@ -153,8 +152,8 @@ class CheckoutService:
         vision_ms = (perf_counter() - vision_started) * 1000
         policy_started = perf_counter()
 
-        # SKU dùng để tra hồ sơ: ưu tiên lời khai (vì hồ sơ gắn với lời khai,
-        # và chúng ta đang kiểm chứng lời khai đó), nếu không có thì lấy top-1.
+        # SKU dùng để tra hồ sơ ưu tiên lời khai tại POS vì hồ sơ cần được
+        # đối chiếu với lời khai đó. Khi không có lời khai, sử dụng top-1.
         record: Optional[ProvenanceRecord] = None
         if resolved_sku:
             record = self.repo.resolve(resolved_sku, claimed_lot)

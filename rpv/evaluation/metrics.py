@@ -1,10 +1,8 @@
-"""Metric. Mỗi hàm chỉ tính đúng một thứ, để không lẫn "tốt ở đâu" với "tốt cỡ nào".
+"""Các chỉ số nhận diện, từ chối OOD, kiểm chứng SKU và risk–coverage.
 
-Vì sao không dùng một con số accuracy duy nhất: một hệ thống gán mọi hàng lạ vào
-lớp quen vẫn có thể có closed-set accuracy rất cao, trong khi hoàn toàn không
-dùng được ở quầy thật. Bộ metric dưới đây tách rạch ròi bốn câu hỏi khác nhau:
-nhận đúng không, có biết từ chối không, có kiểm chứng được lời khai không, và khi
-được phép im lặng thì rủi ro còn lại là bao nhiêu.
+Closed-set accuracy chỉ đo nhận diện hàng đã biết, không phản ánh việc
+hàng lạ bị gán vào danh mục. Các nhóm chỉ số được tính riêng để theo dõi
+độ chính xác, khả năng từ chối, lỗi kiểm chứng và lỗi trong số ca tự xử lý.
 """
 from __future__ import annotations
 
@@ -143,11 +141,9 @@ def verification_metrics(records: Sequence[Mapping]) -> dict:
 
 def risk_coverage_curve(correct: Sequence[bool], confidence: Sequence[float],
                         n_points: int = 21) -> list[dict]:
-    """Đường risk-coverage: nếu hệ thống được quyền im lặng, chấp nhận trả lời
-    ``coverage``% ca tự tin nhất thì tỉ lệ sai trong số đó là bao nhiêu.
-
-    Đây là cách trung thực nhất để nói về "độ chính xác" của một hệ thống được
-    phép nói không biết — và là lý do abstention không phải là gian lận số liệu.
+    """Risk–coverage khi lần lượt nhận thêm các ca theo độ tin cậy.
+    Coverage là tỷ lệ ca được trả lời; risk là tỷ lệ sai trong các ca đó.
+    Hai chỉ số được đọc cùng nhau khi mô hình được phép từ chối trả lời.
     """
     _check_lengths(correct, confidence)
     confidence = _scores(confidence)
@@ -176,7 +172,7 @@ def coverage_at_risk(curve: Sequence[Mapping], max_risk: float) -> float:
 
 
 def confusion_pairs(y_true: Sequence[str], y_pred: Sequence[str], top: int = 15) -> list[dict]:
-    """Cặp nhầm lẫn hay gặp nhất — dữ liệu để phân tích lỗi, không phải để trang trí."""
+    """Các cặp nhãn nhầm lẫn nhiều nhất, dùng để phân tích lỗi."""
     _check_lengths(y_true, y_pred)
     cnt: Counter = Counter()
     for t, p in zip(y_true, y_pred):

@@ -1,4 +1,4 @@
-"""Versioned 70/30 class partitions and independent image roles for a thesis.
+"""Versioned 70/30 class partitions and independent image roles.
 
 known/unknown are class pools, not binary visual labels. Unknown images never
 participate in head training, model selection or calibration.

@@ -1,4 +1,4 @@
-"""Bounded real DINOv2 integration check; explicitly not thesis evidence."""
+"""Quick DINOv2 integration check on a small real-image subset."""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -77,7 +77,7 @@ def main():
                                                save_calibration_to=output / 'calibration.json')
     print('Checking perturbations, policy scenarios and timing', flush=True)
     evaluation = result.to_json()
-    evaluation['warnings'].insert(0, 'SMOKE ONLY: small selected subset, frozen DINOv2; manifest and used-image hashes checked, not the entire dataset. Not full-data thesis evidence.')
+    evaluation['warnings'].insert(0, 'SMOKE ONLY: small selected subset, frozen DINOv2; manifest and used-image hashes checked, not the entire dataset. Not a full-data evaluation.')
     evaluation['robustness_on_test_split'] = evaluate_robustness(encoder, bank, calibration, subset, max_per_class=2)
     with ProvenanceRepository(output / 'scenarios.db') as repo:
         repo.init_schema()

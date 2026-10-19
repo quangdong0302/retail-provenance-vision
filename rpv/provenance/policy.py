@@ -1,17 +1,11 @@
-"""Policy engine — nơi thị giác và nguồn gốc được đối chiếu với nhau.
+"""Đối chiếu kết quả thị giác với hồ sơ lô.
 
-Đây là "bộ não nghiệp vụ" và là đóng góp trung tâm của đề tài: mô hình thị giác
-không được phép tự quyết định bán hàng. Nó đưa ra bằng chứng thị giác; repository
-đưa ra bằng chứng hồ sơ; policy engine hợp nhất hai nguồn thành một trong bốn
-kết cục (allow / allow_with_warning / assist / block) kèm mã lý do.
+Policy nhận tín hiệu thị giác và hồ sơ, trả allow, allow_with_warning,
+assist hoặc block cùng các mã lý do.
 
-Nguyên tắc thiết kế:
-  * Thiếu bằng chứng KHÔNG bao giờ được suy diễn thành "có bằng chứng". Không có
-    hồ sơ lô thì trạng thái là PROVENANCE_MISSING, không phải "xuất xứ Việt Nam".
-  * An toàn thực phẩm và pháp lý luôn thắng trải nghiệm mua hàng: hàng thu hồi
-    hoặc hết hạn thì BLOCK, kể cả khi thị giác rất tự tin.
-  * Mọi kết cục đều giải thích được bằng danh sách mã lý do; không có "điểm tin
-    cậy" mờ mịt nào được dùng làm lý do duy nhất.
+Thiếu hồ sơ lô mang trạng thái PROVENANCE_MISSING, không suy ra xuất xứ.
+Lô thu hồi hoặc hết hạn bị block dù kết quả thị giác có độ tin cậy cao.
+Mỗi quyết định lưu các lý do cụ thể, không chỉ một điểm tin cậy.
 """
 from __future__ import annotations
 

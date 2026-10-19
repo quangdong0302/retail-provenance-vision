@@ -1,36 +1,25 @@
-"""Hiệu chỉnh rủi ro: khi nào được trả lời, khi nào phải nói "không biết".
+"""Hiệu chỉnh ngưỡng và tập dự đoán trên dữ liệu calibration.
 
-Đây là phần mang tính học thuật nặng nhất của hệ thống và cũng là điểm khác biệt
-so với một classifier thông thường. Ba cơ chế, dùng cùng lúc:
+Mỗi SKU có ngưỡng khoảng cách theo phân vị nội lớp. Các lớp khác nhau
+có mức phân tán và độ dễ nhầm khác nhau; lớp thiếu mẫu dùng ngưỡng gộp.
 
-1. **Ngưỡng open-set theo lớp (Mondrian / class-conditional).** Mỗi SKU có
-   "bán kính chấp nhận" riêng, lấy theo phân vị khoảng cách nội-lớp trên tập
-   calib. Một ngưỡng toàn cục luôn bất công: SKU bao bì đặc thù thì quá lỏng,
-   SKU dễ lẫn (mấy chục giống táo) thì quá chặt. SKU có quá ít mẫu calib sẽ
-   dùng ngưỡng toàn cục thay vì "học" từ 2-3 điểm dữ liệu.
+Split conformal trả về tập dự đoán ở mức alpha. Tập rỗng là từ chối,
+tập nhiều nhãn cần nhân viên xác nhận. Diễn giải coverage khoảng 1-alpha
+phụ thuộc điều kiện dữ liệu i.i.d. của phương pháp.
 
-2. **Split conformal prediction.** Với mức rủi ro alpha, trả về TẬP dự đoán
-   (prediction set) thay vì một nhãn, kèm bảo đảm coverage xấp xỉ 1-alpha trên
-   dữ liệu i.i.d. Tập rỗng = hàng lạ; tập nhiều phần tử = mơ hồ, cần người xác
-   nhận. Đây là ngôn ngữ đúng để nói về rủi ro ở quầy thanh toán, thay cho
-   confidence softmax vốn nổi tiếng overconfident với input lạ.
+Ngưỡng toàn cục được chọn nhỏ nhất để đạt known-recall mục tiêu trên
+known-calibration. Hàng lạ được đánh giá riêng trên test.
 
-3. **Ngưỡng toàn cục theo ràng buộc nghiệp vụ.** Chọn ngưỡng nhỏ nhất trên
-   known-calib đạt known-recall mục tiêu; đánh giá hàng lạ riêng trên test.
+Artifact còn lưu Energy OOD và selective-risk gate. Risk và coverage
+của các gate kết hợp được đo riêng, không kế thừa bảo đảm của tập conformal.
 
-Artifact mới còn lưu Energy OOD và gate selective risk fit trên known-calib.
-Chỉ phần tập conformal gốc có diễn giải coverage conformal; các gate kết hợp
-phải báo risk/coverage thực tế, không tự kế thừa bảo đảm đó.
+Phân bố score calibration được giữ lại để tính p-value theo công thức
+``(1 + #{s_calib >= s_obs}) / (n + 1)``. Đây là hạng của score so với mẫu
+hiệu chỉnh, không phải xác suất nhãn đúng. Giới hạn của score gộp nằm
+trong giao thức v2.
 
-Mô hình hiệu chỉnh còn lưu lại PHÂN BỐ điểm nonconformity trên tập calib của
-từng lớp. Nhờ vậy lúc kiểm chứng tính được p-value conformal đúng nghĩa
-``(1 + #{s_calib >= s_obs}) / (n + 1)`` thay vì một tỉ số "gần giống p-value".
-Giá trị này biểu diễn hạng của score so với tập hiệu chỉnh, không phải xác
-suất nhãn sản phẩm đúng. Các giới hạn khi dùng score gộp nằm trong giao thức v2.
-
-Quy tắc bất di bất dịch: ngưỡng và phân vị được CHỌN trên tập calib, và số liệu
-báo cáo phải đo trên tập test rời hẳn. Chọn ngưỡng rồi báo cáo trên cùng tập
-đó là rò rỉ dữ liệu và luôn cho số liệu đẹp hơn thực tế.
+Ngưỡng được chọn trên calibration, kết quả báo trên test tách biệt.
+Dùng cùng tập để chọn ngưỡng và báo kết quả sẽ gây rò rỉ dữ liệu.
 """
 from __future__ import annotations
 
@@ -218,9 +207,7 @@ class CalibrationModel:
 
 def _conformal_quantile(scores: Sequence[float], alpha: float) -> float:
     """Phân vị conformal hữu hạn mẫu: ceil((n+1)(1-alpha))/n.
-
-    Hệ số (n+1) không phải chi tiết trang trí: đây chính là phần bảo đảm
-    coverage hữu hạn mẫu của split conformal. Bỏ nó đi là mất tính bảo đảm.
+    Hệ số n+1 là phần hiệu chỉnh cho coverage hữu hạn mẫu của split conformal.
     """
     s = np.sort(np.asarray(scores, dtype=np.float64))
     if not 0 < alpha < 1 or not np.isfinite(s).all():
@@ -238,7 +225,7 @@ def calibrate_global_threshold(known: Sequence[float], unknown: Sequence[float],
     """Choose the smallest threshold reaching the target known recall.
 
     Optional unknown scores provide rejection diagnostics, not threshold tuning.
-    The thesis pipeline fits with known-calib only and measures unknown on test.
+    The evaluation pipeline fits with known-calib only and measures unknown on test.
     """
     k = np.asarray(known, dtype=np.float64)
     u = np.asarray(unknown, dtype=np.float64)

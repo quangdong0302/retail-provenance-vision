@@ -129,10 +129,9 @@ def cmd_init_db(args) -> int:
 
 
 def cmd_warm_cache(args) -> int:
-    """Nhúng trước toàn bộ ảnh trong thư mục dữ liệu.
-
-    Với DINOv2 đây là bước đáng chạy một lần: mọi lệnh sau đó (train-head,
-    calibrate, evaluate, và các lần chạy lại khi đổi alpha) đọc từ cache.
+    """Trích trước vector của toàn bộ ảnh trong thư mục dữ liệu.
+    ``train-head``, ``calibrate`` và ``evaluate`` dùng lại cache, kể cả các
+    lượt chạy lại khi thay alpha mà không đổi ảnh hoặc encoder.
     """
     from rpv.data.dataset import index_dataset
     from rpv.vision.encoders import load_encoder
@@ -470,8 +469,7 @@ def cmd_status(args) -> int:
         encoder = load_encoder()
         enc_info = encoder.describe()
     except Exception as exc:
-        # `status` phải trả lời được KỂ CẢ khi encoder không nạp được — đó chính
-        # là lúc người ta cần nó nhất.
+        # `status` trả thông tin lỗi khi encoder không nạp được.
         print(_json({"encoder": {"error": str(exc)},
                      "hint": "Xem docs/SETUP.md để cài DINOv2 hoặc chạy offline."}))
         return 1

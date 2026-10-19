@@ -1,10 +1,5 @@
 """Test tự động cho phần lõi (chạy được không cần torch/GPU/mạng).
 
-Trọng tâm không phải "code có chạy" mà là các BẤT BIẾN dễ bị vi phạm âm thầm:
-rò rỉ dữ liệu giữa các tập, bank lệch encoder, chuỗi audit bị sửa, và policy ưu
-tiên sai khi nhiều tín hiệu cùng xuất hiện. Đây đúng là những lỗi không làm
-chương trình crash mà chỉ làm kết luận sai.
-
 Chạy: python -m unittest discover -s tests -v
 """
 from __future__ import annotations
@@ -745,10 +740,9 @@ class TestConformalPValue(unittest.TestCase):
         self.assertEqual(ps, sorted(ps, reverse=True), "p-value phải giảm khi khoảng cách tăng")
 
     def test_approximately_uniform_under_null(self):
-        """Điểm sinh từ cùng phân phối với calib -> p-value xấp xỉ đều.
-
-        Đây là tính chất mà công thức cũ (1 - d/threshold) KHÔNG có, nên mọi câu
-        "chấp nhận ở mức ý nghĩa 5%" dựa trên nó đều sai.
+        """Điểm cùng phân phối với calibration có p-value xấp xỉ đều.
+        Công thức 1-d/threshold không có tính chất này, nên không diễn giải
+        được mức ý nghĩa 5%.
         """
         model, _ = self._model(500)
         rng = np.random.default_rng(11)
@@ -790,10 +784,8 @@ class TestVisionPreprocessing(unittest.TestCase):
         self.assertEqual(x.dtype, np.float32)
 
     def test_center_crop_preserves_aspect_ratio(self):
-        """Ảnh 2:1 sau khi resize-cạnh-ngắn + cắt giữa vẫn giữ tỉ lệ vật thể.
-
-        Resize thẳng về hình vuông làm méo vật thể (dưa leo thành bí) — biến dạng
-        mà backbone chưa từng thấy khi pretrain.
+        """Ảnh 2:1 giữ tỷ lệ vật thể sau resize cạnh ngắn và cắt giữa.
+        Resize thẳng về hình vuông có thể làm biến dạng vật thể dài.
         """
         from rpv.vision.encoders import preprocess_for_vit
         wide = np.zeros((100, 200, 3), np.uint8)
@@ -881,8 +873,10 @@ class TestScenarioGuards(unittest.TestCase):
 
 
 class TestConcurrency(unittest.TestCase):
-    """FastAPI và Gradio gọi handler từ nhiều thread. Cả hai lỗi dưới đây chỉ
-    xuất hiện qua API, không bao giờ qua CLI hay test tuần tự."""
+    """Kiểm tra repository và audit khi được gọi từ nhiều thread.
+    FastAPI và Gradio dùng nhiều thread; test tuần tự không kiểm tra được
+    các trường hợp truy cập đồng thời này.
+    """
 
     def test_repository_usable_from_other_threads(self):
         import threading

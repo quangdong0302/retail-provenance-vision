@@ -1,17 +1,15 @@
-"""ProjectionHead + episodic training (Prototypical Networks) trên đặc trưng DINOv2.
+"""ProjectionHead học bằng episodic prototypical training trên vector DINOv2.
 
-Đây là phần DUY NHẤT được huấn luyện trong hệ thống: backbone DINOv2 đóng băng,
-nên toàn bộ chi phí train chỉ là vài trăm nghìn tham số chạy trên embedding đã
-cache sẵn — vài phút CPU, không cần GPU.
+Head là phần được huấn luyện; backbone giữ cố định. Vector backbone được
+cache để dùng lại giữa các lượt học. Head có vài trăm nghìn tham số,
+có thể huấn luyện trên CPU; thời gian phụ thuộc cấu hình và số episode.
 
-Vì sao dùng episodic/prototypical thay vì softmax classifier: train và inference
-phải dùng CÙNG một cơ chế nearest-prototype. Train softmax rồi suy luận bằng
-nearest-neighbour tạo lệch phân phối train/test, và tệ hơn là buộc phải train
-lại khi thêm SKU mới — đúng thứ mà yêu cầu nghiệp vụ "chụp 2-3 ảnh là bán được"
-không cho phép.
+Training và suy luận cùng dùng nearest-prototype. Danh mục lớp nằm trong
+prototype bank, không nằm trong một softmax classifier cố định. Thêm SKU
+tạo prototype từ 2–3 ảnh support mà không cần học lại bộ phân loại.
 
-Module này import được kể cả khi chưa cài torch: lỗi chỉ phát sinh khi thực sự
-gọi hàm, nên bộ test lõi vẫn chạy trên máy không có PyTorch.
+Module import được khi chưa cài torch; lỗi chỉ phát sinh lúc gọi phần cần
+torch, nên test lõi vẫn chạy được trên máy không có thư viện này.
 """
 from __future__ import annotations
 
@@ -48,13 +46,11 @@ except ImportError:  # pragma: no cover
 
 if _HAS_TORCH:
     class ProjectionHead(nn.Module):
-        """MLP nhỏ: Linear -> GELU -> Dropout -> Linear, đầu ra L2-normalize.
+        """MLP: Linear -> GELU -> Dropout -> Linear, đầu ra chuẩn hóa L2.
 
-        Có residual từ đầu vào (khi cùng chiều) là quyết định có chủ đích: head
-        chỉ cần *tinh chỉnh* không gian DINOv2 cho bài toán nông sản, không cần
-        học lại từ đầu. Không có residual, head khởi tạo ngẫu nhiên sẽ phá cấu
-        trúc embedding pretrained ở những epoch đầu và thường không hồi phục
-        được với lượng dữ liệu nhỏ của một khóa luận.
+        Residual từ đầu vào được dùng khi cùng số chiều, giúp giữ biểu diễn DINOv2
+        ban đầu trong lúc học phần điều chỉnh. Cách này hạn chế thay đổi lớn từ
+        head khởi tạo ngẫu nhiên khi dữ liệu huấn luyện ít.
         """
 
         def __init__(self, in_dim: int, out_dim: int = 128, dropout: float = 0.3) -> None:
@@ -97,12 +93,11 @@ if _HAS_TORCH:
             return z
 
     def prototypical_loss(support, query, query_labels, temperature: float = 10.0):
-        """support: [n_way, k_shot, D]; query: [n_query, D]; labels: [n_query].
+        """support: [n_way,k_shot,D]; query: [n_query,D]; labels: [n_query].
 
-        Loss = cross-entropy trên -distance tới prototype (Snell et al., 2017),
-        có hệ số nhiệt vì embedding đã L2-normalize nên khoảng cách nằm gọn
-        trong [0, 2]: không scale thì logit quá phẳng và gradient gần như biến
-        mất — bản trước học rất chậm chính vì lý do này.
+        Cross-entropy trên khoảng cách âm tới prototype (Snell et al., 2017).
+        Hệ số nhiệt điều chỉnh độ lớn logits: vector chuẩn hóa L2 có khoảng cách
+        trong [0,2], logits không scale có thể quá phẳng và làm học chậm.
         """
         protos = F.normalize(support.mean(dim=1), dim=-1)          # [n_way, D]
         dists = torch.cdist(query, protos)                         # [n_query, n_way]

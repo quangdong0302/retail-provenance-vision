@@ -1,12 +1,12 @@
 """Chạy đánh giá thị giác end-to-end trên một bộ dữ liệu.
 
-Thứ tự bắt buộc (và là điểm sửa quan trọng nhất so với bản trước của dự án):
+Thứ tự bắt buộc :
 
     support -> đăng ký prototype
     calib   -> CHỌN ngưỡng / phân vị conformal
     test    -> BÁO CÁO số liệu
 
-Không bao giờ đo trên tập đã dùng để chọn ngưỡng.
+Không đo trên tập đã dùng để chọn ngưỡng.
 """
 from __future__ import annotations
 
@@ -336,9 +336,8 @@ def evaluate_system(data_dir: str | Path | None = None,
                                     'ood_score': res.ood_score, 'rejection_reason': res.rejection_reason})
             y_true_open.append(UNKNOWN_LABEL)
             if res.status == STATUS_UNKNOWN or not res.prediction_set:
-                # ``not prediction_set`` bắt cả trường hợp danh mục rỗng: bản
-                # trước lấy prediction_set[0] và ném IndexError ở đúng nhánh
-                # đáng ra phải được báo cáo tử tế.
+                # Tập rỗng, kể cả khi chưa có danh mục, được tính là từ chối.
+                # Kiểm tra trước khi truy cập prediction_set[0] để tránh IndexError.
                 y_pred_open.append(UNKNOWN_LABEL)
                 n_unknown_rejected += 1
             else:

@@ -1,9 +1,8 @@
-"""Cấu hình trung tâm. Mọi hằng số nằm ở đây, không rải rác trong code.
+"""Cấu hình dùng chung của dự án.
 
-Encoder mặc định là **DINOv2** (frozen, self-supervised). ``classical`` vẫn còn
-nhưng chỉ với một vai trò: baseline thủ công để đo xem backbone pretrained đóng
-góp bao nhiêu, và để bộ test tự động chạy được trên máy không có PyTorch. Mọi
-số liệu chính của luận văn đo bằng DINOv2.
+Encoder chính là DINOv2 đóng băng. ``classical`` là baseline descriptor thủ
+công để so sánh đóng góp của backbone và chạy test khi máy không có PyTorch.
+Thực nghiệm chính sử dụng DINOv2.
 """
 from __future__ import annotations
 
@@ -81,10 +80,8 @@ load_env_file()
 
 
 def _env(key: str, default):
-    """Đọc biến môi trường theo KIỂU của giá trị mặc định.
-
-    Giá trị sai kiểu làm chương trình dừng ngay với thông báo rõ ràng, thay vì
-    chạy tiếp bằng mặc định — cấu hình bị bỏ qua âm thầm là lỗi rất khó truy.
+    """Đọc biến môi trường theo kiểu của giá trị mặc định.
+    Giá trị sai kiểu gây lỗi cấu hình, không được thay bằng mặc định.
     """
     raw = os.environ.get(key)
     if raw is None:
@@ -116,7 +113,7 @@ class VisionConfig:
     encoder: str = field(default_factory=lambda: _env("RPV_ENCODER", "dinov2"))
     dinov2_variant: str = field(default_factory=lambda: _env("RPV_DINOV2_VARIANT", "vits14"))
     # Chạy hoàn toàn offline: trỏ tới bản clone facebookresearch/dinov2 và/hoặc
-    # file trọng số .pth đã tải sẵn. Máy bảo vệ khóa luận thường không có mạng.
+    # file trọng số .pth đã tải sẵn. Các đường dẫn này hỗ trợ chạy khi không có mạng.
     dinov2_repo: str = field(default_factory=lambda: _env("RPV_DINOV2_REPO", ""))
     dinov2_weights: str = field(default_factory=lambda: _env("RPV_DINOV2_WEIGHTS", ""))
     device: str = field(default_factory=lambda: _env("RPV_DEVICE", ""))       # "" = tự chọn
@@ -265,7 +262,7 @@ class Settings:
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
     policy: PolicyConfig = field(default_factory=PolicyConfig)
     paths: Paths = field(default_factory=Paths)
-    # Adapter ra Internet bị TẮT mặc định: luận văn phải tái lập được offline,
+    # Adapter Internet tắt mặc định để chạy offline và tái lập kết quả,
     # và dữ liệu cộng đồng không thay thế hồ sơ lô (xem docs/ARCHITECTURE.md).
     enable_external_adapters: bool = field(default_factory=lambda: _env("RPV_EXTERNAL_ADAPTERS", False))
     training_protocol: str = field(default_factory=lambda: _env('RPV_TRAINING_PROTOCOL', 'episodic'))
@@ -275,11 +272,10 @@ settings = Settings()
 
 
 def reload_settings() -> Settings:
-    """Đọc lại toàn bộ cấu hình từ môi trường.
+    """Nạp lại cấu hình sau khi thay biến môi trường.
 
-    Cần thiết cho test và cho notebook: ``settings`` là singleton dựng lúc
-    import, nên đổi ``os.environ`` sau đó sẽ không có tác dụng nếu không gọi hàm
-    này. Trước đây đây là một cái bẫy im lặng.
+    ``settings`` được tạo lúc import. Thay ``os.environ`` trong notebook hoặc
+    test cần gọi hàm này để cập nhật cấu hình đang sử dụng.
     """
     global settings
     settings = Settings()

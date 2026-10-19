@@ -166,7 +166,7 @@ def build_demo(get_service, sku_choices, lot_choices, intake, checkout, trace, s
                     <p>Thêm ảnh, chọn SKU và lô. Đọc quyết định, lý do và hướng xử lý trước khi tiếp tục.</p></article>
                     </div>''')
                 with gr.Column(elem_classes='rpv-card'):
-                    gr.Markdown('### Các tình huống nên trình bày\n\n'
+                    gr.Markdown('### Các tình huống demo\n\n'
                                 '- **Đúng mặt hàng, đủ hồ sơ:** kiểm tra ảnh với SKU và lô phù hợp.\n'
                                 '- **Khai sai SKU:** giữ nguyên ảnh và chọn mặt hàng khác.\n'
                                 '- **Hàng ngoài danh mục:** tải ảnh mặt hàng chưa đăng ký.\n'

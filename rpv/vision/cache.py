@@ -1,15 +1,12 @@
-"""Cache embedding theo NỘI DUNG ảnh.
+"""Cache vector theo nội dung ảnh và cấu hình encoder.
 
-Vì sao bắt buộc phải có khi chuyển sang DINOv2: ``calibrate``, ``evaluate`` và
-``train-head`` đều đọc lại cùng một bộ ảnh, và một lượt forward ViT trên CPU đắt
-hơn descriptor thủ công vài trăm lần. Không có cache, mỗi lần chỉnh alpha là
-phải chờ lại toàn bộ backbone — đủ lâu để người ta ngừng đánh giá lại cho tử tế,
-và đó mới là thiệt hại thật.
+``train-head``, ``calibrate`` và ``evaluate`` có thể dùng lại đặc trưng
+của cùng ảnh, tránh chạy lại DINOv2 mỗi lần học head hoặc đổi ngưỡng.
+Chi phí chạy ViT trên CPU lớn hơn descriptor thủ công.
 
-Khoá cache = (tag encoder) + (sha256 nội dung ảnh) + (có TTA hay không). Đổi
-backbone, đổi kích thước ảnh, đổi TTA hay sửa một pixel trong ảnh đều sinh khoá
-khác, nên cache KHÔNG THỂ trả về vector của một cấu hình khác. Đây là lý do khoá
-theo hash nội dung chứ không theo đường dẫn file.
+Khóa cache gồm tag encoder, SHA256 nội dung ảnh và cấu hình TTA.
+Đổi backbone, kích thước ảnh, TTA hoặc nội dung ảnh sẽ tạo khóa khác.
+Hash nội dung được dùng thay đường dẫn để ảnh đã thay không dùng nhầm vector cũ.
 """
 from __future__ import annotations
 

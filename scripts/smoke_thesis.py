@@ -1,4 +1,4 @@
-"""Bounded real-image train/evaluation check, explicitly not a thesis benchmark."""
+"""Quick real-image training and evaluation check on a small subset."""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -63,7 +63,7 @@ def main():
         encoder=encoder, splits=subset, k_shot=cfg.k_shot,
         save_bank_to=out / 'prototypes.json', save_calibration_to=out / 'calibration.json',
     )
-    result.warnings.insert(0, 'SMOKE TEST ONLY: a small selected subset and 2 short epochs; not full-data accuracy or thesis evidence.')
+    result.warnings.insert(0, 'SMOKE TEST ONLY: a small selected subset and 2 short epochs; not a full-data accuracy measurement.')
     paths = write_report(result.to_json(), out_dir=out, stem='smoke_only')
     assert len(result.novel_evaluation['runs']) == 3
     assert calibration.bank_fingerprint == bank.fingerprint()

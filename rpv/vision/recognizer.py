@@ -1,8 +1,8 @@
 """Nhận diện: ảnh -> top-k ứng viên + quyết định chấp nhận/từ chối/mơ hồ.
 
-Đầu ra CÓ CHỦ ĐÍCH không phải một nhãn duy nhất. Ở quầy thanh toán, "tôi nghĩ
-là A nhưng cũng có thể B, nhờ nhân viên xác nhận" là hành vi đúng và an toàn
-hơn nhiều so với việc đoán chắc chắn một nhãn sai.
+Khi nhiều nhãn cùng phù hợp, kết quả giữ lại tập ứng viên và yêu cầu nhân
+viên xác nhận tại quầy. Các trường hợp chưa đủ độ tin cậy không được ép
+thành một nhãn duy nhất để xử lý tự động.
 """
 from __future__ import annotations
 

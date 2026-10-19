@@ -1,17 +1,14 @@
-"""Adapter ra chuẩn/nguồn bên ngoài.
+"""Kết nối dữ liệu ngoài và chuyển đổi định dạng.
 
-Ranh giới đạo đức nghiên cứu được đặt ở đây, và cần nói thẳng trong luận văn:
+Open Food Facts cung cấp thông tin cộng đồng, không thay thế chứng từ.
+Dữ liệu được đánh dấu ``authoritative=False`` và ``evidence_grade="none"``.
 
-  * Dữ liệu cộng đồng (Open Food Facts) chỉ để **làm giàu thông tin hiển thị**.
-    Nó KHÔNG phải chứng từ và không bao giờ được dùng để kết luận xuất xứ.
-    Adapter luôn đánh dấu ``authoritative=False`` và ``evidence_grade="none"``.
-  * GS1 Digital Link được hiện thực ở mức **phân tích/sinh URI** — thứ có thể
-    kiểm chứng offline và tự viết được, không cần tài khoản resolver.
-  * EPCIS 2.0 được hiện thực ở mức **xuất dữ liệu nội bộ ra định dạng chuẩn**,
-    để chứng minh hệ thống có khả năng kết nối, thay vì tuyên bố đã kết nối.
+GS1 Digital Link hỗ trợ phân tích và sinh URI offline, không cần tài khoản
+resolver. EPCIS 2.0 hỗ trợ xuất dữ liệu nội bộ theo định dạng trao đổi;
+chức năng này chưa đồng nghĩa với kết nối một hệ thống EPCIS bên ngoài.
 
-Mọi lệnh gọi mạng bị TẮT mặc định (``app_config.settings.enable_external_adapters``) để
-kết quả luận văn tái lập được và pipeline không phụ thuộc dịch vụ ngoài.
+Gọi mạng tắt mặc định qua ``app_config.settings.enable_external_adapters``
+để các lượt chạy không phụ thuộc dịch vụ ngoài.
 """
 from __future__ import annotations
 

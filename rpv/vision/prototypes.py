@@ -1,18 +1,13 @@
-"""Prototype bank — "danh mục thị giác" của hệ thống.
+"""Danh mục prototype theo sku_id.
 
-Khác biệt then chốt so với bản trước của dự án: prototype KHÔNG còn khoá theo
-tên thư mục ảnh (``"Apple 10"``) mà khoá theo ``sku_id`` — đối tượng có thật
-trong nghiệp vụ, liên kết được tới lô hàng, nhà cung cấp và chứng từ. Nhờ đó
-câu hỏi "cái này là gì" (thị giác) và "nó từ đâu" (hồ sơ) mới nối được với nhau.
+Khóa là ``sku_id`` thay vì tên thư mục ảnh như ``Apple 10`` để nối kết quả
+nhận diện với lô hàng, nhà cung cấp và chứng từ.
 
-Hai tính chất kỹ thuật quan trọng:
+Bank hỗ trợ k tâm mỗi SKU bằng k-means, dùng cho các hình thái như xanh/chín
+hoặc có/không túi. Một tâm trung bình có thể nằm giữa các nhóm hình thái.
 
-* **Multi-centroid.** Một SKU có thể có nhiều hình thái (chuối xanh/chín, có
-  hoặc không túi nilon). Ép về một tâm duy nhất làm trung bình rơi vào vùng
-  không giống bất kỳ ảnh thật nào. Bank hỗ trợ k tâm/SKU (k-means nhẹ).
-* **Có phiên bản.** Bank ghi kèm ``encoder_tag``/``dim``; ``load()`` từ chối
-  bank sinh bởi encoder khác thay vì trả về khoảng cách vô nghĩa. Với DINOv2,
-  ``encoder_tag`` gồm cả variant, kích thước ảnh và projection head đang dùng.
+Bank lưu ``encoder_tag`` và ``dim``. ``load()`` từ chối encoder không khớp.
+Với DINOv2, tag gồm variant, kích thước ảnh và head đang dùng.
 """
 from __future__ import annotations
 
@@ -38,13 +33,12 @@ def _now() -> str:
 
 
 def pairwise_distances(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """Khoảng cách Euclid ``[len(a), len(b)]`` tính bằng phép nhân ma trận.
+    """Khoảng cách Euclid [len(a), len(b)] bằng phép nhân ma trận.
 
-    Vì sao không dùng ``norm(a[:, None] - b[None])``: cách đó cấp phát tensor
-    trung gian ``[N, M, D]``. Với DINOv2 (D=384..1536) và vài nghìn ảnh đánh giá,
-    đó là hàng GB RAM cho một phép tính đáng ra chỉ cần một GEMM. Công thức dưới
-    đây dùng ``|a-b|^2 = |a|^2 + |b|^2 - 2a·b``, chính xác kể cả khi vector chưa
-    normalize, và ``maximum(0)`` chặn sai số âm nhỏ trước khi lấy căn.
+    ``|a-b|^2 = |a|^2 + |b|^2 - 2a·b`` tránh tạo tensor [N,M,D] như phép trừ
+    broadcast. Với D=384..1536 và hàng nghìn ảnh, tensor đó có thể tốn hàng GB.
+    Công thức dùng được cả khi chưa chuẩn hóa vector; maximum(0) chặn sai số
+    âm nhỏ trước khi lấy căn.
     """
     a = np.asarray(a, dtype=np.float64)
     b = np.asarray(b, dtype=np.float64)

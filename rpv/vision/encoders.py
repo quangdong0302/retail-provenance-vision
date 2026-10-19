@@ -1,19 +1,14 @@
-"""Encoder ảnh -> vector đặc trưng L2-normalized.
+"""Chuyển ảnh thành vector đặc trưng chuẩn hóa L2.
 
-**DINOv2 là encoder chính của hệ thống.** ``ClassicalEncoder`` vẫn ở đây nhưng
-chỉ với hai vai trò rõ ràng, và luận văn nên nói đúng như vậy:
+``DinoV2Encoder`` là encoder chính: backbone pretrained đóng băng,
+kèm ``ProjectionHead`` tùy chọn học bằng episodic training.
 
-  * ``DinoV2Encoder`` — DINOv2 frozen (self-supervised, pretrained) + tùy chọn
-    ``ProjectionHead`` fine-tune bằng episodic training. Mặc định của hệ thống
-    và là encoder chính trong thực nghiệm; classical được báo riêng làm baseline.
-  * ``ClassicalEncoder`` — descriptor thủ công (numpy + Pillow). Baseline trung
-    thực để đo backbone pretrained đóng góp bao nhiêu, và là encoder chạy được
-    trên máy không có PyTorch nên bộ test tự động không cần GPU/mạng.
+``ClassicalEncoder`` dùng numpy và Pillow để tạo descriptor thủ công.
+Encoder này là baseline so sánh với DINOv2 và phục vụ test không cần
+PyTorch, GPU hoặc mạng.
 
-Quy tắc bất di bất dịch: encoder LUÔN công bố ``tag`` (định danh phiên bản).
-Prototype bank và mô hình calibration đều ghi kèm tag này; nếu tag lệch, hệ
-thống báo lỗi thay vì so sánh khoảng cách giữa hai không gian embedding khác
-nhau — lỗi này im lặng và rất khó phát hiện khi đã lên production.
+Mỗi encoder có ``tag`` định danh phiên bản. Prototype và calibration lưu
+cùng tag; tag không khớp sẽ gây lỗi để tránh dùng lẫn không gian đặc trưng.
 """
 from __future__ import annotations
 
@@ -54,11 +49,8 @@ def image_sha256(path: str | Path) -> str:
 
 
 def load_rgb(path: str | Path) -> np.ndarray:
-    """Đọc ảnh -> RGB uint8 [H,W,3], đã xử lý xoay theo EXIF.
-
-    Bỏ bước EXIF nghĩa là ảnh chụp bằng điện thoại dọc sẽ vào model ở tư thế
-    nằm ngang — một trong những nguyên nhân "model chạy tốt trên dataset, sai ở
-    quầy" kinh điển.
+    """Đọc ảnh RGB uint8 [H,W,3] và xoay theo EXIF.
+    Thông tin EXIF giữ ảnh chụp dọc từ điện thoại đúng hướng trước khi nhận diện.
     """
     with Image.open(path) as img:
         img = ImageOps.exif_transpose(img)
@@ -83,12 +75,11 @@ class BaseEncoder(ABC):
         return load_rgb(path)
 
     def _tta_views(self, arrays: Sequence[np.ndarray]) -> list[list[np.ndarray]]:
-        """Các "góc nhìn" dùng cho test-time augmentation: gốc + lật ngang.
+        """Các ảnh dùng cho TTA: ảnh gốc và ảnh lật ngang.
 
-        Chỉ lật ngang, có chủ đích: mặt hàng ở quầy không có hướng cố định nên
-        lật ngang là phép biến đổi bảo toàn nhãn; còn lật dọc hay quay lớn thì
-        không (chữ trên bao bì, cuống trái cây). Biến thể đa tỉ lệ chưa được
-        triển khai ở đây; muốn so sánh cần thí nghiệm riêng trên validation.
+        Lật ngang phù hợp với mặt hàng không có hướng đặt cố định. Lật dọc hoặc
+        quay lớn có thể đổi hướng chữ trên bao bì và cuống trái cây nên không dùng.
+        Biến thể đa tỉ lệ chưa có ở đây; việc so sánh cần thực nghiệm trên validation.
         """
         flipped = [np.ascontiguousarray(a[:, ::-1]) for a in arrays]
         return [list(arrays), flipped]
@@ -124,11 +115,11 @@ class BaseEncoder(ABC):
 
     def _cached_features(self, paths: Sequence[str | Path], use_tta: bool | None = None,
                          batch_size: int | None = None) -> np.ndarray:
-        """Nhúng danh sách ảnh, có cache và chia lô.
+        """Trích vector theo từng batch, dùng lại cache khi có.
 
-        Chia lô KHÔNG phải tối ưu cho vui: bản trước nạp toàn bộ ảnh vào RAM rồi
-        đẩy một batch duy nhất qua ViT, nên chỉ cần vài trăm ảnh là hết bộ nhớ
-        GPU. Đánh giá trên bộ dữ liệu thật luôn có vài nghìn ảnh.
+        Chia batch giới hạn lượng ảnh trong RAM và VRAM. Cách nạp toàn bộ ảnh rồi
+        chạy một batch có thể hết bộ nhớ GPU khi xử lý vài trăm ảnh, trong khi
+        bộ đánh giá có thể gồm hàng nghìn ảnh.
         """
         paths = list(paths)
         if not paths:
@@ -198,25 +189,17 @@ class BaseEncoder(ABC):
 
 
 class ClassicalEncoder(BaseEncoder):
-    """Descriptor thủ công, bám vật thể thay vì bám nền.
+    """Descriptor thủ công dùng làm baseline và chạy test không cần PyTorch.
 
-    Vì sao vẫn giữ trong một khóa luận đã dùng DINOv2: nó là baseline trung thực
-    để chứng minh backbone pretrained đóng góp bao nhiêu. Rất nhiều báo cáo bỏ
-    qua bước này rồi kết luận "deep learning tốt hơn" mà không có số so sánh nào.
-    Nó cũng là encoder duy nhất chạy được khi không có PyTorch, nên CI kiểm
-    chứng được toàn bộ pipeline mà không cần GPU hay mạng.
+    Các thành phần:
+    * Tách nền trước khi tính descriptor để giảm ảnh hưởng của mặt bàn,
+      vốn có thể chiếm phần lớn ảnh và giống nhau giữa các mặt hàng.
+    * Dùng r/(r+g+b), g/(r+g+b) thay RGB thô để giảm ảnh hưởng của cường độ sáng.
+    * Dùng biên độ FFT của chữ ký bán kính theo góc để mô tả hình dạng ít phụ
+      thuộc góc quay của vật thể.
 
-    Ba quyết định thiết kế đáng bảo vệ trước hội đồng, mỗi cái sửa một lỗi cụ
-    thể của bản histogram toàn ảnh:
-
-    * **Tách nền trước khi mô tả.** Ở quầy thanh toán, nền là mặt bàn: nó chiếm
-      phần lớn khung hình và giống nhau giữa mọi mặt hàng. Histogram toàn ảnh
-      vì thế mô tả cái bàn, không mô tả quả xoài.
-    * **Bất biến ánh sáng bằng chromaticity.** Dùng r/(r+g+b), g/(r+g+b) thay
-      cho RGB thô: cường độ sáng bị chia đi nên đèn quầy sáng/tối không làm
-      dịch chuyển descriptor.
-    * **Bất biến quay của hình dạng.** Chữ ký bán kính theo góc được đưa qua
-      biên độ FFT: quả xoài đặt xoay kiểu nào cũng cho cùng mô tả hình dạng.
+    Kết quả được dùng để so sánh với backbone pretrained. Pipeline này chỉ cần
+    numpy và Pillow nên các test có thể chạy không cần GPU hoặc mạng.
     """
 
     def __init__(self, size: int = 128, chroma_bins: int = 8, hue_bins: int = 16,
@@ -419,20 +402,14 @@ class ClassicalEncoder(BaseEncoder):
 
 def preprocess_for_vit(arr: np.ndarray, image_size: int, center_crop: bool = True,
                        crop_ratio: float = 0.875, resize_mode: str | None = None) -> np.ndarray:
-    """RGB uint8 [H,W,3] -> float32 [3,S,S] đã chuẩn hoá theo ImageNet.
+    """RGB uint8 [H,W,3] -> float32 [3,S,S], chuẩn hóa theo ImageNet.
 
-    Tự viết bằng PIL + numpy thay vì ``torchvision.transforms``: bớt một phụ
-    thuộc nặng, và quan trọng hơn là bước tiền xử lý trở nên đọc được — nó ảnh
-    hưởng tới số liệu ngang với model nên không nên nằm sau lớp trừu tượng của
-    thư viện khác.
+    Tiền xử lý dùng PIL và numpy, không phụ thuộc torchvision.transforms.
+    Hàm ở cấp module để kiểm tra riêng trên máy không có PyTorch.
 
-    ``center_crop=True`` lặp lại transform đánh giá của DINOv2: resize CẠNH NGẮN
-    rồi cắt giữa, nên tỉ lệ khung ảnh được giữ nguyên. Resize thẳng về hình vuông
-    (``center_crop=False``) làm méo vật thể — quả dưa leo dài thành quả bí — và đó
-    là biến dạng mà backbone chưa từng thấy khi pretrain.
-
-    Là hàm module-level có chủ đích: nhờ vậy bước tiền xử lý kiểm thử được trên
-    máy không có PyTorch, đúng phần dễ sai nhất và im lặng nhất.
+    ``center_crop=True`` resize cạnh ngắn rồi cắt giữa theo transform đánh giá
+    của DINOv2, giữ tỷ lệ vật thể. ``center_crop=False`` resize thẳng về hình
+    vuông, có thể làm biến dạng vật thể dài như dưa leo.
     """
     if image_size <= 0:
         raise ValueError(f"image_size phải > 0 (nhận {image_size}).")
@@ -470,9 +447,8 @@ def preprocess_for_vit(arr: np.ndarray, image_size: int, center_crop: bool = Tru
 def _certifi_ssl_context():
     """Tạm dùng CA bundle của certifi khi tải trọng số qua HTTPS.
 
-    KHÔNG tắt xác thực chứng chỉ, và KHÔNG để lại thay đổi toàn cục sau khi tải
-    xong: bản trước ghi đè ``ssl._create_default_https_context`` vĩnh viễn, làm
-    mọi lệnh gọi HTTPS khác trong tiến trình đổi hành vi một cách vô hình.
+    Xác thực chứng chỉ vẫn được bật. SSL context được khôi phục sau khi tải,
+    tránh ảnh hưởng các lệnh HTTPS khác trong cùng tiến trình.
     """
     original = getattr(ssl, "_create_default_https_context", None)
     try:
@@ -489,20 +465,16 @@ def _certifi_ssl_context():
 
 
 class DinoV2Encoder(BaseEncoder):
-    """DINOv2 frozen (+ ProjectionHead tùy chọn). Encoder chính của hệ thống.
+    """DINOv2 đóng băng, kèm ProjectionHead tùy chọn.
 
-    Backbone luôn ở chế độ eval và không có gradient: thêm sản phẩm mới chỉ là
-    phép trung bình vài vector, không train lại gì cả — đúng yêu cầu nghiệp vụ
-    "2-3 ảnh là dùng được ngay".
+    Backbone ở chế độ eval, không nhận gradient. Thêm SKU tạo prototype từ
+    vector của vài ảnh support, không học lại backbone hoặc head.
 
-    Ba điều được xử lý tường minh vì đều đã từng làm hệ thống sai hoặc chết:
+    Kích thước ảnh phải chia hết cho patch size 14; giá trị không hợp lệ được
+    báo lỗi trước khi chạy. Suy luận theo batch để giới hạn VRAM.
 
-    * **Kích thước ảnh phải chia hết cho patch size (14).** ViT-*/14 chia ảnh
-      thành ô 14x14; đưa 256 vào sẽ hoặc lỗi hoặc bị cắt ngầm. Ở đây kiểm tra
-      trước và báo lỗi kèm danh sách giá trị hợp lệ.
-    * **Chia lô khi suy luận.** Không chia lô thì chỉ vài trăm ảnh là hết VRAM.
-    * **Cache theo backbone.** Khoá cache dùng tag backbone, không gồm head, nên
-      train lại projection head không làm mất cache đặc trưng đã tính.
+    Cache đặc trưng backbone dùng tag không chứa head, nên học lại head vẫn
+    dùng được các vector backbone đã lưu.
     """
 
     _OUT_DIM = {"vits14": 384, "vitb14": 768, "vitl14": 1024, "vitg14": 1536}
@@ -568,11 +540,8 @@ class DinoV2Encoder(BaseEncoder):
 
     # -- nạp model ---------------------------------------------------------
     def _load_backbone(self, repo: str | Path | None, weights: str | Path | None):
-        """Nạp backbone, ưu tiên các đường offline trước khi nghĩ tới mạng.
-
-        Thứ tự: repo local do người dùng chỉ định -> cache torch.hub đã có sẵn
-        -> tải từ GitHub. Máy dùng để bảo vệ khóa luận thường không có mạng, nên
-        đường offline phải là đường chính, không phải phương án chữa cháy.
+        """Nạp backbone theo thứ tự: repo local, cache torch.hub, tải từ GitHub.
+        Repo và trọng số đã lưu cho phép chạy và tái lập offline.
         """
         import torch
 
@@ -643,11 +612,9 @@ class DinoV2Encoder(BaseEncoder):
             log(f"[dinov2] bỏ qua {len(unexpected)} tham số lạ trong {weights_file.name}")
 
     def _load_head(self, path: Path) -> None:
-        """Nạp ProjectionHead và TỪ CHỐI nếu nó thuộc backbone khác.
-
-        Ghép head train trên ViT-S vào ViT-B sẽ không crash nếu chỉ so chiều
-        (có khi trùng), nhưng khoảng cách sinh ra vô nghĩa. Vì vậy checkpoint
-        lưu kèm ``backbone_tag`` và ở đây so khớp tường minh.
+        """Nạp head và kiểm tra backbone_tag trong checkpoint.
+        Head và backbone cần cùng không gian đặc trưng. Chỉ kiểm tra số chiều
+        không đủ để xác nhận chúng tương thích.
         """
         import torch
 
@@ -788,9 +755,10 @@ def torch_available() -> bool:
 
 
 def load_encoder(name: str | None = None, **kwargs) -> BaseEncoder:
-    """Factory. Nếu chọn dinov2 mà môi trường thiếu torch, KHÔNG âm thầm đổi
-    encoder: raise lỗi rõ ràng, vì đổi encoder ngầm sẽ làm mọi số liệu so sánh
-    trong luận văn mất ý nghĩa."""
+    """Tạo encoder theo cấu hình.
+    Thiếu PyTorch khi chọn DINOv2 sẽ báo lỗi, không tự chuyển sang classical
+    để giữ đúng encoder đã chọn cho lượt thực nghiệm.
+    """
     name = (name or app_config.settings.vision.encoder).strip().lower()
     if name in {"dinov2", "dino"}:
         encoder = DinoV2Encoder(**kwargs)

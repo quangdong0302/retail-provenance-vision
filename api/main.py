@@ -1,15 +1,13 @@
-"""FastAPI service — lớp tích hợp với thiết bị quầy/POS.
+"""FastAPI cho thiết bị quầy và POS.
 
-Toàn bộ nghiệp vụ nằm ở ``rpv.services.checkout``; file này chỉ làm HTTP. Nhờ
-vậy demo Gradio, CLI, test và API dùng CHUNG một logic, và số liệu trong luận
-văn đo đúng thứ chạy trong sản phẩm.
+HTTP gọi nghiệp vụ tại ``rpv.services.checkout``, dùng chung logic với
+Gradio, CLI và test.
 
-Lưu ý về khởi tạo: encoder DINOv2 được nạp MỘT LẦN trong ``lifespan``. Nếu nạp
-thất bại (thiếu torch, chưa có trọng số, không có mạng) thì service khởi động ở
-trạng thái suy giảm và ``/health`` nói rõ vì sao, thay vì tiến trình chết ngay
-lúc boot và người dùng chỉ thấy container restart liên tục.
+DINOv2 được nạp một lần trong ``lifespan``. Nếu thiếu torch, trọng số hoặc
+mạng khiến encoder không nạp được, service vẫn chạy ở trạng thái suy giảm;
+``/health`` trả nguyên nhân lỗi.
 
-Chạy: uvicorn api.main:app --reload  (mở http://127.0.0.1:8000/docs)
+Chạy: uvicorn api.main:app --reload  (http://127.0.0.1:8000/docs)
 """
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Regression tests for the thesis data and evaluation protocol."""
+"""Regression tests for grouped data splits and the evaluation protocol."""
 import shutil
 import tempfile
 import unittest

@@ -1,18 +1,14 @@
-"""Kiểm chứng: ảnh + SKU được KHAI BÁO -> khớp hay không khớp.
+"""Đối chiếu ảnh với SKU đã khai báo tại quầy.
 
-Đây là bài toán khác với nhận diện, và là bài toán đúng của quầy tự thanh toán:
-người mua (hoặc POS) đã khai "đây là xoài cát Hòa Lộc, 45.000đ/kg"; việc của hệ
-thống là xác nhận hoặc phản đối lời khai đó. Nó bắt được cả nhầm lẫn thật thà
-(chọn sai trong menu) và gian lận (khai hàng rẻ, lấy hàng đắt).
+Đầu vào gồm ảnh và SKU do người mua hoặc POS chọn. Kết quả dùng để phát
+hiện chọn nhầm mặt hàng hoặc khai mã hàng rẻ cho hàng đắt.
 
-Ngưỡng dùng ở đây là ngưỡng của CHÍNH SKU được khai (class-conditional), không
-phải ngưỡng toàn cục — nhờ vậy SKU dễ lẫn không bị "ăn theo" độ dễ của SKU khác.
+Ngưỡng class-conditional của chính SKU khai báo được dùng để kiểm tra;
+SKU dễ nhầm không dùng chung ngưỡng của các SKU dễ nhận diện hơn.
 
-``p_value`` trả về là p-value conformal đúng nghĩa, tính từ phân bố điểm calib
-của lớp được khai. Bản trước trả về ``1 - d/threshold`` và vẫn gọi nó là
-p-value: con số đó đơn điệu theo khoảng cách nên xếp hạng đúng, nhưng không có
-phân phối đều dưới giả thuyết không, nên mọi câu như "chấp nhận ở mức ý nghĩa
-5%" đều sai. Đây là loại sai dễ bị hội đồng bắt nhất vì nó nằm ở tên biến.
+``p_value`` tính từ phân bố điểm calibration của SKU. Công thức cũ
+``1 - d/threshold`` chỉ là điểm xếp hạng theo khoảng cách, không có
+tính chất phân bố của p-value nên không dùng để diễn giải mức ý nghĩa 5%.
 """
 from __future__ import annotations
 

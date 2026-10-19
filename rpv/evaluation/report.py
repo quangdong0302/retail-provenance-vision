@@ -1,4 +1,4 @@
-"""Xuất báo cáo: JSON để tái lập + Markdown để dán vào luận văn."""
+"""Xuất báo cáo:."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -224,11 +224,11 @@ def write_report(evaluation: Mapping, scenarios: Optional[Mapping] = None,
             A(f"- {w}")
         A("")
 
-    A("## Giới hạn phải nêu trong luận văn")
+    A("## Giới hạn của kết quả")
     A("")
     A("- Hệ thống KHÔNG suy đoán xuất xứ từ hình ảnh. Kết luận nguồn gốc luôn xuất phát từ hồ sơ lô "
       "và chứng từ; thiếu chứng từ thì trạng thái là \"chưa xác minh\".")
-    A("- Số liệu trên dữ liệu mô phỏng chỉ để kiểm chứng pipeline. Kết quả đưa vào luận văn phải đo "
+    A("- Số liệu trên dữ liệu mô phỏng chỉ để kiểm chứng pipeline. Khả năng sử dụng tại POS cần được đánh giá "
       "trên ảnh thật thu tại quầy, nhiều ngày và nhiều điều kiện sáng.")
     A("- Chưa xử lý chống giả mạo (ảnh in, ảnh trên màn hình điện thoại) và chưa xử lý nhiều vật thể "
       "trong một khung hình.")

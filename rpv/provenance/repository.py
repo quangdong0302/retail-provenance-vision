@@ -1,15 +1,13 @@
-"""Truy cập dữ liệu truy xuất nguồn gốc (SQLite, stdlib).
+"""Đọc và ghi hồ sơ truy xuất bằng SQLite.
 
-Chọn sqlite3 thuần thay vì ORM là quyết định có chủ đích: lược đồ là phần cần
-bảo vệ trước hội đồng, nên nó phải nằm ở dạng SQL đọc được trong
-``rpv/domain/schema.sql``, không bị ẩn sau lớp trừu tượng.
+Sử dụng sqlite3 có sẵn trong Python. Lược đồ được lưu trực tiếp tại
+``rpv/domain/schema.sql`` để đọc và kiểm tra các bảng, khóa và ràng buộc.
 
-**An toàn đa luồng.** FastAPI chạy endpoint đồng bộ trong threadpool và Gradio
-cũng gọi handler từ thread khác. Kết nối sqlite3 mặc định chỉ dùng được trong
-đúng thread đã tạo ra nó, nên bản trước sẽ ném ``ProgrammingError`` ngay lần gọi
-API đầu tiên — chạy CLI và test thì không bao giờ lộ ra. Ở đây kết nối được tạo
-với ``check_same_thread=False`` và MỌI truy cập đi qua một ``RLock``: sqlite ghi
-tuần tự, nên khoá không làm mất thông lượng thật mà loại hẳn một lớp lỗi.
+FastAPI và Gradio có thể gọi repository từ nhiều thread. Kết nối dùng
+``check_same_thread=False`` và các truy cập đi qua RLock. Cấu hình mặc
+định của sqlite3 chỉ cho phép dùng kết nối trong thread đã tạo, nên
+truy cập từ thread khác sẽ gây ProgrammingError. Khóa giúp tuần tự hóa
+truy cập dùng chung kết nối; SQLite vẫn ghi tuần tự.
 """
 from __future__ import annotations
 

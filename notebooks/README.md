@@ -1,10 +1,6 @@
-# Notebook dùng chung cấu hình với terminal
+# Tổ chức phần thực nghiệm trong notebook
 
-Chép dữ liệu theo [data/README.md](../data/README.md) vào `data/dataset_v2/`.
-`.env` và `.env.example` dùng đường dẫn tương đối, 2-shot, class seed 1, split seed 401.
-Không có file cấu hình riêng hay thư mục lượt chạy riêng cho notebook.
-Chọn kernel đã cài `requirements.txt` và `ipykernel` (máy hiện tại: **Python (build_ML)**).
-Restart Kernel sau khi thay đổi `.env`; biến môi trường đã có ưu tiên hơn file `.env` như CLI.
+Các notebook ghi lại các bước từ dữ liệu đến demo, với dữ liệu đặt tại `data/dataset_v2/` theo [bố cục đã chuẩn bị](../data/README.md). `.env` và `.env.example` dùng đường dẫn tương đối, 2-shot, class seed 1 và split seed 401. Cấu hình và đầu ra được dùng chung với terminal. Kernel trên máy hiện tại là **Python (build_ML)**, đã cài các thư viện trong `requirements.txt` và `ipykernel`. Kernel cần được khởi động lại khi thay `.env`; biến môi trường đã có vẫn được ưu tiên như ở CLI.
 
 | Bước | Notebook | Lệnh/chức năng tương ứng ở terminal |
 |---|---|---|
@@ -15,26 +11,19 @@ Restart Kernel sau khi thay đổi `.env`; biến môi trường đã có ưu ti
 | 5 | [Additional tests](05_additional_tests.ipynb) | Unknown bổ sung, `evaluate --robustness` và `benchmark`; tùy chọn |
 | 6 | [Demo](06_demo.ipynb) | `init-db`, `seed-scenarios`, `python -m app.demo` |
 
-Notebook 01–04 có thể Run All. Notebook 05 chọn các phép thử cần thiết;
-notebook 06 chạy từng ô để mở và dừng demo. `notebook_utils.py` chỉ hỗ trợ gọi CLI,
-vẽ hình và đọc báo cáo; dùng lại model/config hiện có, không tạo thuật toán train khác.
+Các ô ở notebook 01–04 được thực hiện lần lượt. Với notebook 05, mỗi ô tương ứng một phép thử bổ sung; notebook 06 được chạy từng ô để mở và dừng demo. `notebook_utils.py` giúp gọi CLI, vẽ hình và đọc báo cáo, còn thuật toán huấn luyện, mô hình và cấu hình vẫn dùng chung với terminal.
 
-Có thể train bằng terminal thay cho notebook 02:
+Lượt huấn luyện cũng có thể được thực hiện từ terminal thay cho notebook 02 bằng lệnh lưu dưới đây:
 
 ```powershell
 python scripts/run_all.py --encoder dinov2 --train-head
 ```
 
-Sau đó mở notebook 03–06 để hiệu chỉnh/đánh giá/demo bằng cùng head và đường dẫn đầu ra.
-Notebook 02 train mới và ghi đè `RPV_HEAD_OUT`; chạy lại ô này sau khi đổi tham số
-thì cần calibrate/evaluate lại. Nếu bị ngắt, cache được dùng lại, optimizer train từ đầu.
-DINOv2 pretrained tự tải/cache; chỉ projection head được học mới.
+Notebook 03–06 phục vụ hiệu chỉnh, đánh giá và trình bày demo sau lượt huấn luyện ở terminal, với cùng head và đường dẫn đầu ra. Notebook 02 tạo head mới và ghi đè `RPV_HEAD_OUT`; khi thay tham số và học lại, cũng thực hiện lại calibration và evaluation. Nếu lượt học bị ngắt, vector trong cache được dùng lại nhưng optimizer bắt đầu từ đầu. DINOv2 pretrained được tải hoặc lấy từ cache; chỉ projection head được học mới.
 
-Đầu ra dùng cùng cấu hình terminal: `var/thesis/projection_head.pt`, `prototypes.json`,
-`calibration.json`, `rpv.db`, `reports/`; cache tại `var/embed_cache/`.
-Baseline có artifact riêng trong thư mục reports để không ghi đè bank/calibration vận hành.
+Đầu ra dùng cùng cấu hình với terminal: `var/thesis/projection_head.pt`, `prototypes.json`, `calibration.json`, `rpv.db`, `reports/` và cache tại `var/embed_cache/`. Các baseline có artifact riêng trong reports để không ghi đè bank và calibration của mô hình đang sử dụng.
 
-Để mở demo trực tiếp bằng PowerShell sau khi train:
+Các lệnh chạy demo trực tiếp bằng PowerShell sau khi đã có head:
 
 ```powershell
 $env:RPV_PROJECTION_CKPT = 'var/thesis/projection_head.pt'
@@ -42,7 +31,4 @@ $env:MKL_THREADING_LAYER = 'SEQUENTIAL'
 python -m app.demo
 ```
 
-Notebook tự chọn `RPV_PROJECTION_CKPT` nếu đã cấu hình; khi để trống, dùng head tại
-`RPV_HEAD_OUT` cho các bước sau train. Để checkpoint trống khi bắt đầu train mới.
-CLI/run_all giữ nguyên code. Dữ liệu unknown không dùng train/chọn head/calibrate;
-hồ sơ lô/chứng từ demo là mô phỏng. Risk mục tiêu 1% phải đối chiếu số liệu test thực tế.
+Notebook lấy `RPV_PROJECTION_CKPT` khi biến này đã được cấu hình; nếu để trống thì các bước sau train dùng head tại `RPV_HEAD_OUT`. Checkpoint để trống ở bước bắt đầu train mới. Các bước gọi trực tiếp chức năng của CLI và `run_all`. Unknown chính được tách khỏi train, chọn head và calibration; dữ liệu lô cùng chứng từ trong demo là mô phỏng. Ghi chú mục tiêu risk 1% cần được đối chiếu với kết quả test của đúng cấu hình, không xem là mức đã đạt.

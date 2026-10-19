@@ -1,11 +1,9 @@
-"""Mô hình nghiệp vụ. Đây là nơi "nguồn gốc" trở thành dữ liệu có thể kiểm chứng.
+"""Mô hình dữ liệu sản phẩm, lô hàng, chứng từ và sự kiện truy xuất.
 
-Thiết kế theo tinh thần TCVN 12850:2019 và Thông tư 02/2024/TT-BKHCN: sản phẩm
-được định danh (mã truy vết sản phẩm), địa điểm được định danh (mã truy vết địa
-điểm), và mỗi công đoạn trong chuỗi là một sự kiện có thời gian. Vì vậy
-``TraceEvent`` mượn cấu trúc EPCIS 2.0 (what/when/where/why) — không phải để
-"cho có chuẩn quốc tế", mà vì nó là cấu trúc tối thiểu đủ trả lời câu hỏi
-"lô hàng này đi qua những đâu".
+Thiết kế tham khảo TCVN 12850:2019 và Thông tư 02/2024/TT-BKHCN:
+định danh sản phẩm, định danh địa điểm và ghi thời gian các công đoạn.
+``TraceEvent`` dùng các trường what/when/where/why của EPCIS 2.0
+để lưu diễn biến của lô hàng.
 """
 from __future__ import annotations
 
@@ -190,7 +188,7 @@ class SKU:
 
 @dataclass
 class Lot:
-    """Lô hàng — nơi câu hỏi 'từ đâu' thực sự được trả lời."""
+    """Lô hàng gắn thông tin nguồn gốc, thời hạn và chứng từ."""
     lot_id: str
     sku_id: str
     supplier_id: str

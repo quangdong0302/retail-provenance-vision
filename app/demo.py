@@ -1,19 +1,17 @@
-"""Demo Gradio — giao diện để bảo vệ khóa luận.
+"""
 
-Các tab trình bày luồng vận hành trước hội đồng:
+Các tab của giao diện demo:
 
   1. Quầy kiểm tra: kiểm chứng lời khai và ra quyết định có mã lý do.
   2. Đăng ký có kiểm tra: đối chiếu SKU dễ nhầm và hướng dẫn bổ sung ảnh.
   3. Nhập hồ sơ lô: liên kết SKU với nhà cung cấp, nguồn gốc và chứng từ.
   4. Truy xuất: từ lô hàng ra chứng từ, sự kiện và bản xuất EPCIS 2.0.
   5. Kiểm toán: phát hiện thay đổi làm đứt chuỗi hash của lịch sử quyết định.
-  6. Hướng dẫn demo: các bước chuẩn bị và tình huống nên trình bày.
+  6. Hướng dẫn demo: các bước chuẩn bị và tình huống kiểm tra.
 
-Hệ thống được dựng LAZY (lần gọi đầu tiên), không phải lúc import: nạp DINOv2
-mất vài giây và có thể thất bại, nên nó không được xảy ra như một tác dụng phụ
-của câu ``import``. Trước đây chỉ cần import module là backbone đã bị nạp — làm
-mọi công cụ đọc file này (kể cả pydoc) phải chờ, và làm lỗi cấu hình hiện ra ở
-đúng chỗ khó hiểu nhất.
+Service và DINOv2 được nạp ở lần gọi đầu tiên, không nạp lúc import.
+Việc import để đọc tài liệu hoặc dùng công cụ như pydoc không phải chờ
+backbone hay phụ thuộc vào cấu hình chạy mô hình.
 
 Chạy: python -m app.demo
 """

@@ -1,5 +1,4 @@
--- Lược đồ dữ liệu RPV. SQLite (stdlib, không cần server) — đủ cho khóa luận và
--- demo 1 quầy. Chuyển sang PostgreSQL cần sửa placeholder, kiểu dữ liệu,
+-- Lược đồ dữ liệu RPV dùng SQLite (stdlib, không cần server) cho demo một quầy. Chuyển sang PostgreSQL cần sửa placeholder, kiểu dữ liệu,
 -- PRAGMA, quản lý kết nối và giao dịch trong repository, không chỉ đổi driver.
 PRAGMA foreign_keys = ON;
 

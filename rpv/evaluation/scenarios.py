@@ -1,12 +1,9 @@
-"""Kịch bản nghiệp vụ — phần đánh giá mà một bài "chỉ nhận diện ảnh" không có.
+"""Các tình huống kiểm tra policy bằng dữ liệu có kiểm soát.
 
-Chín tình huống dưới đây là những gì thật sự xảy ra ở quầy. Chúng được sinh bằng
-dữ liệu có kiểm soát và có KẾT CỤC MONG ĐỢI, nên hệ thống được đánh giá như một
-hệ thống ra quyết định, không phải như một bộ phân loại ảnh.
-
-Chính bảng kết quả này là câu trả lời cho câu hỏi "mô hình có gì để người ta
-dùng": không phải accuracy cao hơn, mà là hành xử đúng khi dữ liệu thiếu, khi
-chứng từ hết hiệu lực, khi lô bị thu hồi, và khi lời khai không khớp hàng thật.
+Mỗi tình huống có kết quả mong đợi để đối chiếu với quyết định của hệ thống.
+Các trường hợp gồm thiếu hồ sơ, chứng từ hết hiệu lực, lô thu hồi và SKU
+khai báo không khớp ảnh. Kết quả đo xử lý nghiệp vụ, tách khỏi accuracy
+nhận diện; dữ liệu tình huống là mô phỏng.
 """
 from __future__ import annotations
 
@@ -210,7 +207,7 @@ def build_provenance_scenarios(repo: ProvenanceRepository,
                               sku_to_images[sku6][0], sku6, lot6.lot_id, 33_000))
 
     # 7) ticket_switch ----------------------------------------------------
-    # Ảnh là SKU đắt, nhưng khai là SKU rẻ. Đây là dạng thất thoát kinh điển.
+    # Ảnh của SKU đắt nhưng lời khai dùng mã SKU rẻ.
     expensive, cheap = S["happy"], S["cheap"]
     ensure_sku(cheap, 12_000)
     lot7 = repo.upsert_lot(Lot(
@@ -276,12 +273,11 @@ _VISION_REASONS = {
 
 
 def _divergence_source(resp) -> str:
-    """Khi kết cục lệch mong đợi, phải nói rõ lệch vì đâu.
+    """Phân loại nguyên nhân khi kết quả khác với mong đợi.
 
-    Gộp hai loại sai vào một con số "pass rate" là cách nhanh nhất để tự lừa
-    mình: lỗi nhận diện (encoder yếu, ảnh xấu) và lỗi luật nghiệp vụ (policy
-    thiết kế sai) cần hai cách xử lý hoàn toàn khác nhau. Luật nghiệp vụ được
-    kiểm tra riêng bằng unit test với tín hiệu thị giác giả định đúng.
+    Lỗi nhận diện do encoder hoặc chất lượng ảnh được phân biệt với lỗi
+    quy tắc nghiệp vụ để đánh giá đúng tỷ lệ đạt của từng phần. Luật nghiệp
+    vụ được kiểm tra riêng bằng unit test với tín hiệu thị giác giả định đúng.
     """
     reasons = set(resp.reasons)
     if reasons & _VISION_REASONS:
