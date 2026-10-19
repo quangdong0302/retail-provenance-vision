@@ -8,7 +8,8 @@ flowchart LR
     B --> C[DINOv2 frozen]
     C --> D[Head residual tùy chọn]
     D --> E[Embedding chuẩn hóa và prototype]
-    E --> F[Nhận diện hoặc kiểm chứng SKU được khai]
+    E --> O[Energy OOD + tập conformal + ngưỡng risk]
+    O --> F[Nhận diện hoặc kiểm chứng SKU được khai]
     F --> G[Policy]
     H[Hồ sơ lô và chứng từ] --> G
     G --> I[Quyết định và mã lý do]
@@ -26,6 +27,13 @@ thái; tập rỗng thể hiện từ chối. Verifier kiểm tra riêng SKU mà
 khai. Conformal calibration dùng dữ liệu hiệu chỉnh tách biệt; p-value không
 phải xác suất sản phẩm đúng. Khi thiếu calibration phù hợp, hệ thống yêu cầu
 xác nhận thay vì tự coi kết quả là chắc chắn.
+
+Calibration mới còn lưu Energy từ logits −distance² và ngưỡng selective
+risk chọn bằng known-calibration. OOD có thể từ chối dù khoảng cách vẫn
+trong bán kính conformal; risk gate có thể yêu cầu nhân viên dù tập chỉ có
+một ứng viên. Verifier dùng chung các gate này để lời khai SKU không đi
+vòng qua cơ chế từ chối. Công thức và giới hạn thống kê:
+[đối chiếu nhận xét](REVIEW_CHANGES.md).
 
 ## Mã nguồn theo trách nhiệm
 
@@ -65,6 +73,11 @@ SKU nối danh mục thị giác với Product/Lot. Mỗi lô gắn Supplier, Ev
 TraceEvent. Policy hợp nhất các tín hiệu theo mức nghiêm trọng, trả `allow`,
 `allow_warning`, `assist` hoặc `block`, kèm lý do. Mặt hàng đăng ký có kiểm tra
 vẫn ở chế độ nhân viên xác nhận; đạt kiểm tra nội bộ không bật tự động bán.
+
+Trường `decision_state` trả `match`, `mismatch`, `abstain` hoặc
+`provenance_exception`, độc lập với hành động vận hành. Thiếu hạn sử dụng
+hợp lệ của lô cũng yêu cầu kiểm tra. Ngày hiệu lực chứng từ và lô dùng cùng
+ngày nghiệp vụ truyền vào policy. [Sơ đồ 7 bảng](DATABASE.md).
 
 Ảnh không chứng minh vùng trồng, quốc gia hay danh tính lô. Chứng từ do người
 dùng nhập và trạng thái xác minh được quản lý riêng. Adapter cộng đồng chỉ

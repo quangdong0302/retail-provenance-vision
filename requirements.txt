@@ -2,6 +2,7 @@
 # An existing compatible CUDA installation of torch is kept by pip.
 numpy>=1.24
 Pillow>=10.0
+matplotlib>=3.7
 torch>=2.1
 certifi>=2024.2.2
 fastapi>=0.110

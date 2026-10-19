@@ -47,6 +47,10 @@ def main() -> int:
     # points at a checkpoint deleted during reset. Baseline also has no head.
     if args.train_head or encoder == 'classical':
         env['RPV_PROJECTION_CKPT'] = ''
+    if encoder == 'classical':
+        env.update(RPV_CATALOG_BACKEND='prototype', RPV_CONFIDENCE_METHOD='energy',
+                   RPV_CONFORMAL_SCORE='distance', RPV_RISK_CALIBRATION='known',
+                   RPV_PROTOTYPE_COLOR_WEIGHT='0', RPV_DECISION_RULE='conformal')
     steps = [
         ['-m', 'rpv.cli', 'dataset-info'],
         ["-m", "rpv.cli", "init-db"],
@@ -59,7 +63,7 @@ def main() -> int:
         steps.append(['-m', 'rpv.cli', 'train-head', '--out', head_path])
     steps.extend([
         ["-m", "rpv.cli", "calibrate"],
-        ["-m", "rpv.cli", "evaluate"],
+        ["-m", "rpv.cli", "evaluate", "--use-catalog"],
         ["-m", "unittest", "discover", "-s", "tests", "-t", "."],
         ["-m", "rpv.cli", "audit-verify"],
     ])

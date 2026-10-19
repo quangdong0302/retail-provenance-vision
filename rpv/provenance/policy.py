@@ -22,14 +22,14 @@ from typing import Optional
 
 from rpv import config as app_config
 from rpv.domain.models import (
-    DecisionOutcome, EvidenceStatus, LotStatus, ReasonCode,
+    DecisionOutcome, DecisionState, EvidenceStatus, LotStatus, ReasonCode,
 )
 from rpv.provenance.repository import ProvenanceRecord
 from rpv.vision.recognizer import (
     RecognitionResult, STATUS_AMBIGUOUS, STATUS_MATCH, STATUS_UNKNOWN,
 )
 from rpv.vision.verification import (
-    VerificationResult, VERIFY_CONFIRMED, VERIFY_MISMATCH, VERIFY_NOT_IN_CATALOG,
+    VerificationResult, VERIFY_CONFIRMED, VERIFY_MISMATCH, VERIFY_NOT_IN_CATALOG, VERIFY_AMBIGUOUS,
 )
 
 # Mức nghiêm trọng: dùng để hợp nhất nhiều tín hiệu — kết cục cuối là mức nặng nhất.
@@ -55,6 +55,7 @@ class PolicyDecision:
     origin_summary: str = "Chưa xác minh"
     requires_operator: bool = False
     audit_notes: dict = field(default_factory=dict)
+    decision_state: str = DecisionState.ABSTAIN.value
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -98,6 +99,7 @@ class PolicyEngine:
         reasons: list[str] = []
         messages: list[str] = []
         outcome = DecisionOutcome.ALLOW
+        identity_mismatch = False
 
         def escalate(new: DecisionOutcome) -> None:
             nonlocal outcome
@@ -125,6 +127,10 @@ class PolicyEngine:
                     f"Ảnh không khớp mặt hàng khai báo. Hệ thống thấy giống {verification.best_sku!r} hơn."
                 )
                 escalate(DecisionOutcome.BLOCK)
+            elif verification.status == VERIFY_AMBIGUOUS:
+                reasons.append(ReasonCode.VISION_AMBIGUOUS.value)
+                messages.append('Thị giác chưa đủ chắc chắn; chuyển nhân viên kiểm tra.')
+                escalate(DecisionOutcome.ASSIST)
             elif verification.status == VERIFY_NOT_IN_CATALOG:
                 reasons.append(ReasonCode.VISION_SKU_NOT_REGISTERED.value)
                 messages.append("Mặt hàng khai báo chưa được đăng ký ảnh mẫu; chưa thể kiểm chứng bằng thị giác.")
@@ -149,6 +155,30 @@ class PolicyEngine:
                 reasons.append(ReasonCode.VISION_CATALOG_EMPTY.value)
                 messages.append("Danh mục thị giác rỗng; chưa đăng ký mặt hàng nào.")
                 escalate(DecisionOutcome.ASSIST)
+
+        else:
+            reasons.append(ReasonCode.VISION_UNKNOWN.value)
+            messages.append('Thiếu tín hiệu thị giác; cần nhân viên xác nhận.')
+            escalate(DecisionOutcome.ASSIST)
+
+        # Bind the visual assertion to the SKU whose lot/evidence is inspected.
+        # A valid record for B must never authorize a visual confirmation of A.
+        if record and record.sku:
+            visual_sku = None
+            if verification and verification.status == VERIFY_CONFIRMED:
+                visual_sku = verification.claimed_sku
+            elif verification is None and recognition and recognition.status == STATUS_MATCH:
+                if len(recognition.prediction_set) == 1:
+                    visual_sku = recognition.prediction_set[0]
+                else:
+                    reasons.append(ReasonCode.VISION_AMBIGUOUS.value)
+                    messages.append('Tín hiệu match không có đúng một SKU; cần nhân viên kiểm tra.')
+                    escalate(DecisionOutcome.ASSIST)
+            if visual_sku is not None and visual_sku != record.sku.sku_id:
+                identity_mismatch = True
+                reasons.append(ReasonCode.VISION_MISMATCH.value)
+                messages.append(f'Thị giác xác nhận {visual_sku!r}, nhưng hồ sơ thuộc {record.sku.sku_id!r}.')
+                escalate(DecisionOutcome.BLOCK)
 
         # ---------- 2. Tín hiệu nguồn gốc ----------
         provenance_status = PROVENANCE_MISSING
@@ -188,6 +218,10 @@ class PolicyEngine:
                 escalate(DecisionOutcome.BLOCK)
 
             days = lot.days_to_expiry(today)
+            if days is None:
+                reasons.append(ReasonCode.LOT_EXPIRY_UNKNOWN.value)
+                messages.append('Hồ sơ chưa có hạn sử dụng hợp lệ; cần nhân viên kiểm tra.')
+                escalate(DecisionOutcome.ASSIST)
             if lot.status == LotStatus.EXPIRED.value or (days is not None and days < 0):
                 reasons.append(ReasonCode.LOT_EXPIRED.value)
                 messages.append(f"Lô {lot.lot_id} đã hết hạn sử dụng ({lot.expiry_date}).")
@@ -203,9 +237,13 @@ class PolicyEngine:
                 escalate(DecisionOutcome.ASSIST)
 
             # Chứng từ
-            have = record.verified_evidence_types()
+            have = record.verified_evidence_types(today)
             required = self._required_evidence(record)
             missing = [t for t in required if t not in have]
+            if any(e.evidence_type in missing and (e.status == EvidenceStatus.EXPIRED.value or
+                   (e.status == EvidenceStatus.VERIFIED.value and not e.is_currently_valid(today))) for e in record.evidence):
+                reasons.append(ReasonCode.PROVENANCE_EXPIRED.value)
+                messages.append('Chứng từ bắt buộc đã hết hạn hoặc có ngày hiệu lực không hợp lệ.')
             pending = [e for e in record.evidence if e.status == EvidenceStatus.PENDING.value]
             rejected = [e for e in record.evidence if e.status == EvidenceStatus.REJECTED.value]
             if rejected:
@@ -240,7 +278,7 @@ class PolicyEngine:
                     or ReasonCode.LOT_SKU_CONFLICT.value in reasons \
                     or ReasonCode.LOT_SOLD_OUT.value in reasons or ReasonCode.LOT_STATUS_INVALID.value in reasons:
                 provenance_status = PROVENANCE_BLOCKED
-            elif missing or ReasonCode.ORIGIN_UNKNOWN.value in reasons:
+            elif missing or ReasonCode.ORIGIN_UNKNOWN.value in reasons or days is None:
                 provenance_status = PROVENANCE_INCOMPLETE
             else:
                 provenance_status = PROVENANCE_OK
@@ -267,7 +305,21 @@ class PolicyEngine:
         if verification is not None and verification.status == VERIFY_MISMATCH:
             reasons.append(ReasonCode.PRICE_RISK.value)
 
+        visual_confident = (verification.status == VERIFY_CONFIRMED and not verification.suspicious_margin) if verification else bool(recognition and recognition.status == STATUS_MATCH and len(recognition.prediction_set) == 1)
+        visual_confident = visual_confident and not identity_mismatch
+        if identity_mismatch or (verification and verification.status == VERIFY_MISMATCH):
+            state = DecisionState.MISMATCH
+        elif not visual_confident:
+            state = DecisionState.ABSTAIN
+        elif provenance_status != PROVENANCE_OK:
+            state = DecisionState.PROVENANCE_EXCEPTION
+        else:
+            state = DecisionState.MATCH
+        valid_lot = bool(record and record.sku and record.lot and record.lot.sku_id == record.sku.sku_id
+                         and record.lot.status == LotStatus.ACTIVE.value
+                         and record.lot.days_to_expiry(today) is not None and not record.lot.is_expired(today))
         return PolicyDecision(
+            decision_state=state.value,
             outcome=outcome.value,
             reasons=list(dict.fromkeys(reasons)),   # loại trùng, giữ thứ tự
             messages=messages,
@@ -276,7 +328,9 @@ class PolicyEngine:
             requires_operator=outcome in (DecisionOutcome.ASSIST, DecisionOutcome.BLOCK),
             audit_notes={
                 "required_evidence": list(self._required_evidence(record)) if record else [],
-                "verified_evidence": sorted(record.verified_evidence_types()) if record else [],
+                "verified_evidence": sorted(record.verified_evidence_types(today)) if record else [],
                 "severity": _SEVERITY[outcome],
+                'decision_inputs': {'identity_confident': visual_confident, 'valid_lot': valid_lot,
+                                    'compliance': provenance_status == PROVENANCE_OK},
             },
         )

@@ -48,7 +48,7 @@ def image_sha256(path: str | Path) -> str:
     cùng 1 ảnh đầu vào, không phụ thuộc tên file hay đường dẫn."""
     h = hashlib.sha256()
     with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 16), b""):
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
 
@@ -122,8 +122,8 @@ class BaseEncoder(ABC):
         """Áp dụng sau khi lấy từ cache (DINOv2 dùng để chạy projection head)."""
         return vectors
 
-    def embed_paths(self, paths: Sequence[str | Path], use_tta: bool | None = None,
-                    batch_size: int | None = None) -> np.ndarray:
+    def _cached_features(self, paths: Sequence[str | Path], use_tta: bool | None = None,
+                         batch_size: int | None = None) -> np.ndarray:
         """Nhúng danh sách ảnh, có cache và chia lô.
 
         Chia lô KHÔNG phải tối ưu cho vui: bản trước nạp toàn bộ ảnh vào RAM rồi
@@ -132,9 +132,11 @@ class BaseEncoder(ABC):
         """
         paths = list(paths)
         if not paths:
-            return np.zeros((0, self.dim), dtype=np.float32)
-        use_tta = app_config.settings.vision.use_tta if use_tta is None else bool(use_tta)
-        bs = int(batch_size or app_config.settings.vision.batch_size or 32)
+            return np.zeros((0, self._cache_dim()), dtype=np.float32)
+        use_tta = getattr(self, 'use_tta', app_config.settings.vision.use_tta) if use_tta is None else bool(use_tta)
+        bs = app_config.settings.vision.batch_size if batch_size is None else batch_size
+        if type(bs) is not int or bs < 1:
+            raise ValueError('Embedding batch_size phải là số nguyên dương.')
         cache = self._cache()
 
         out = np.zeros((len(paths), self._cache_dim()), dtype=np.float32)
@@ -154,17 +156,39 @@ class BaseEncoder(ABC):
         else:
             todo = list(range(len(paths)))
 
-        for start in range(0, len(todo), bs):
-            idx = todo[start:start + bs]
-            arrays = [self._load(paths[i]) for i in idx]
-            vecs = self._compute_from_arrays(arrays, use_tta)
-            for j, i in enumerate(idx):
-                out[i] = vecs[j]
-                if cache is not None and keys[i] is not None:
-                    cache.put(keys[i], vecs[j])    # type: ignore[arg-type]
-        if cache is not None and todo:
-            cache.flush()
-        return self._postprocess(out)
+        try:
+            for start in range(0, len(todo), bs):
+                idx = todo[start:start + bs]
+                arrays = [self._load(paths[i]) for i in idx]
+                vecs = self._compute_from_arrays(arrays, use_tta)
+                vecs = np.asarray(vecs, dtype=np.float32)
+                if (vecs.shape != (len(idx), self._cache_dim()) or not np.isfinite(vecs).all()
+                        or np.any(np.linalg.norm(vecs, axis=1) < 1e-8)):
+                    raise ValueError('Encoder trả về đặc trưng rỗng, sai số chiều hoặc không hữu hạn.')
+                for j, i in enumerate(idx):
+                    out[i] = vecs[j]
+                    if cache is not None and keys[i] is not None:
+                        cache.put(keys[i], vecs[j])    # type: ignore[arg-type]
+                # Persist every 256 images so an interrupted notebook can resume.
+                if cache is not None and (start + len(idx)) // 256 > start // 256:
+                    cache.flush()
+        finally:
+            if cache is not None and todo:
+                cache.flush()
+        return out
+
+    def embed_paths(self, paths: Sequence[str | Path], use_tta: bool | None = None,
+                    batch_size: int | None = None) -> np.ndarray:
+        if hasattr(self, 'validate_artifacts'):
+            self.validate_artifacts()
+        paths = list(paths)
+        if not paths:
+            return np.zeros((0, self.dim), dtype=np.float32)
+        result = np.asarray(self._postprocess(self._cached_features(paths, use_tta, batch_size)), dtype=np.float32)
+        if (result.shape != (len(paths), self.dim) or not np.isfinite(result).all()
+                or np.any(np.linalg.norm(result, axis=1) < 1e-8)):
+            raise ValueError('Head/encoder trả về đặc trưng không hợp lệ; dừng nhận diện.')
+        return result
 
     def embed_path(self, path: str | Path, use_tta: bool | None = None) -> np.ndarray:
         return self.embed_paths([path], use_tta=use_tta)[0]
@@ -213,6 +237,7 @@ class ClassicalEncoder(BaseEncoder):
         self.grid = int(grid)
         self.radial_sectors = int(radial_sectors)
         self.n_fft = int(n_fft)
+        self.use_tta = bool(app_config.settings.vision.use_tta)
         self.dim = (
             chroma_bins * chroma_bins      # histogram chromaticity 2D của foreground
             + hue_bins                     # hue có trọng số saturation
@@ -222,9 +247,9 @@ class ClassicalEncoder(BaseEncoder):
             + 9                            # kết cấu: gradient + phương sai cục bộ
             + grid * grid * 3              # chroma trung bình theo lưới (bố cục màu bên trong vật thể)
         )
-        self.tag = (f"classical2_s{self.size}_c{self.chroma_bins}_h{self.hue_bins}"
+        self.cache_tag = (f"classical2_s{self.size}_c{self.chroma_bins}_h{self.hue_bins}"
                     f"_g{self.grid}_r{self.radial_sectors}_f{self.n_fft}")
-        self.cache_tag = self.tag
+        self.tag = f'{self.cache_tag}_tta{int(self.use_tta)}'
 
     # -- helpers ------------------------------------------------------------
     @staticmethod
@@ -503,6 +528,7 @@ class DinoV2Encoder(BaseEncoder):
         self.center_crop = bool(cfg.center_crop)
         self.crop_ratio = float(cfg.crop_ratio)
         self.resize_mode = cfg.resize_mode
+        self.use_tta = bool(cfg.use_tta)
         if self.resize_mode not in {'pad', 'crop', 'stretch'}:
             raise ValueError('RPV_RESIZE_MODE phải là pad, crop hoặc stretch.')
         if not 0.5 <= self.crop_ratio <= 1.0:
@@ -534,11 +560,11 @@ class DinoV2Encoder(BaseEncoder):
         self.dim = self.backbone_dim
         self.head_path = ""
         self.head_metadata = {}
-        ckpt = checkpoint if checkpoint not in (None, "") else (cfg.checkpoint or None)
+        ckpt = None if checkpoint is False else (checkpoint if checkpoint not in (None, "") else (cfg.checkpoint or None))
         if ckpt:
             self._load_head(Path(ckpt))
-        head_tag = "raw" if self.head is None else f"proj{self.dim}_{image_sha256(self.head_path)[:16]}"
-        self.tag = f"{self.backbone_tag}_{head_tag}_tta{int(cfg.use_tta)}"
+        head_tag = "raw" if self.head is None else f"proj{self.dim}_{self._head_sha256[:16]}"
+        self.tag = f"{self.backbone_tag}_{head_tag}_tta{int(self.use_tta)}"
 
     # -- nạp model ---------------------------------------------------------
     def _load_backbone(self, repo: str | Path | None, weights: str | Path | None):
@@ -557,6 +583,16 @@ class DinoV2Encoder(BaseEncoder):
 
         if weights_file is not None and not weights_file.exists():
             raise FileNotFoundError(f"Không tìm thấy file trọng số DINOv2: {weights_file}")
+        if repo_dir is not None:
+            if not (repo_dir / 'hubconf.py').is_file():
+                raise FileNotFoundError(f'Repo DINOv2 chỉ định không hợp lệ: {repo_dir}')
+            try:
+                model = torch.hub.load(str(repo_dir), name, source='local', pretrained=weights_file is None)
+                if weights_file is not None:
+                    self._load_state_into(model, weights_file)
+                return model
+            except Exception as exc:
+                raise RuntimeError(f'Không nạp được repo DINOv2 đã chỉ định {repo_dir}; không đổi sang repo khác.') from exc
 
         local_dirs = [d for d in (repo_dir, Path(torch.hub.get_dir()) / "facebookresearch_dinov2_main")
                       if d is not None and d.exists()]
@@ -623,8 +659,12 @@ class DinoV2Encoder(BaseEncoder):
             )
         from rpv.vision.projection import ProjectionHead
 
+        head_hash = image_sha256(path)
         state = torch.load(path, map_location=self.device, weights_only=True)
-        self.head_metadata = {key: state.get(key, '') for key in ('dataset_fingerprint', 'split_fingerprint')}
+        if image_sha256(path) != head_hash:
+            raise RuntimeError('Head thay đổi trong lúc nạp; dừng và nạp lại checkpoint hoàn chỉnh.')
+        self.head_metadata = {key: state.get(key, '') for key in
+                              ('dataset_fingerprint', 'split_fingerprint', 'development_fingerprint')}
         in_dim = int(state.get("in_dim", self.backbone_dim))
         out_dim = int(state["out_dim"])
         ckpt_backbone = str(state.get("backbone_tag", ""))
@@ -647,6 +687,22 @@ class DinoV2Encoder(BaseEncoder):
         self.head = head
         self.dim = out_dim
         self.head_path = str(path)
+        self._head_sha256 = head_hash
+        info = path.stat()
+        self._head_stamp = (info.st_mtime_ns, info.st_size)
+
+    def validate_artifacts(self):
+        if not self.head_path:
+            return
+        path = Path(self.head_path)
+        if not path.is_file():
+            raise RuntimeError('Head đang dùng đã bị xóa. Khởi động lại demo/API với checkpoint đúng.')
+        info = path.stat()
+        stamp = (info.st_mtime_ns, info.st_size)
+        if stamp != self._head_stamp:
+            if image_sha256(path) != self._head_sha256:
+                raise RuntimeError('Head trên đĩa đã đổi. Khởi động lại demo/API để không chạy head cũ.')
+            self._head_stamp = stamp
 
     # -- tiền xử lý --------------------------------------------------------
     def _preprocess(self, arr: np.ndarray) -> np.ndarray:
@@ -695,12 +751,8 @@ class DinoV2Encoder(BaseEncoder):
 
     def backbone_features(self, paths: Sequence[str | Path], use_tta: bool | None = None) -> np.ndarray:
         """Đặc trưng backbone (bỏ qua head) — dùng để train ProjectionHead."""
-        head, dim = self.head, self.dim
-        self.head, self.dim = None, self.backbone_dim
-        try:
-            return self.embed_paths(paths, use_tta=use_tta)
-        finally:
-            self.head, self.dim = head, dim
+        # Keep a shared head attached while retrieving raw cached backbone vectors.
+        return l2_normalize(self._cached_features(paths, use_tta=use_tta))
 
     def describe(self) -> dict:
         return {
@@ -709,7 +761,7 @@ class DinoV2Encoder(BaseEncoder):
             "image_size": self.image_size, "center_crop": self.center_crop,
             "crop_ratio": self.crop_ratio, 'weights_sha256': self.weights_sha256,
             'resize_mode': self.resize_mode,
-            'use_tta': app_config.settings.vision.use_tta, 'head_metadata': self.head_metadata,
+            'use_tta': self.use_tta, 'head_metadata': self.head_metadata,
             "device": self.device, "projection_head": self.head_path or None,
         }
 
@@ -741,7 +793,12 @@ def load_encoder(name: str | None = None, **kwargs) -> BaseEncoder:
     trong luận văn mất ý nghĩa."""
     name = (name or app_config.settings.vision.encoder).strip().lower()
     if name in {"dinov2", "dino"}:
-        return DinoV2Encoder(**kwargs)
+        encoder = DinoV2Encoder(**kwargs)
+        weight = app_config.settings.vision.prototype_color_weight
+        if weight > 0 and kwargs.get('checkpoint') is not False:
+            from rpv.vision.color import PrototypeColorEncoder
+            return PrototypeColorEncoder(encoder,weight)
+        return encoder
     if name in {"classical", "handcrafted", "baseline"}:
         return ClassicalEncoder(**kwargs)
     raise ValueError(f"Encoder không hỗ trợ: {name!r}. Dùng 'dinov2' (mặc định) hoặc 'classical'.")

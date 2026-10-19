@@ -2,13 +2,12 @@
 
 Các tab trình bày luồng vận hành trước hội đồng:
 
-  1. Nhập hàng: thêm mặt hàng mới bằng 2-3 ảnh, KÈM hồ sơ lô. Đây là chỗ cho
-     thấy nguồn gốc là dữ liệu được khai lúc nhập hàng, không phải thứ đoán ra
-     từ ảnh.
-  2. Quầy thanh toán: kiểm chứng lời khai và ra quyết định có mã lý do.
-  3. Truy xuất: từ lô hàng ra chứng từ, sự kiện, và bản xuất EPCIS 2.0.
-  4. Kiểm toán: phát hiện thay đổi làm đứt chuỗi hash của lịch sử quyết định.
-  5. Đăng ký có kiểm tra: đối chiếu SKU dễ nhầm và hướng dẫn bổ sung ảnh.
+  1. Quầy kiểm tra: kiểm chứng lời khai và ra quyết định có mã lý do.
+  2. Đăng ký có kiểm tra: đối chiếu SKU dễ nhầm và hướng dẫn bổ sung ảnh.
+  3. Nhập hồ sơ lô: liên kết SKU với nhà cung cấp, nguồn gốc và chứng từ.
+  4. Truy xuất: từ lô hàng ra chứng từ, sự kiện và bản xuất EPCIS 2.0.
+  5. Kiểm toán: phát hiện thay đổi làm đứt chuỗi hash của lịch sử quyết định.
+  6. Hướng dẫn demo: các bước chuẩn bị và tình huống nên trình bày.
 
 Hệ thống được dựng LAZY (lần gọi đầu tiên), không phải lúc import: nạp DINOv2
 mất vài giây và có thể thất bại, nên nó không được xảy ra như một tác dụng phụ
@@ -21,16 +20,19 @@ Chạy: python -m app.demo
 from __future__ import annotations
 
 import os
+import math
 import threading
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import gradio as gr
 
+from app.presentation import empty_result, render_checkout
+
 from rpv.audit.hash_chain import AuditLog
 from rpv import config as app_config
 from rpv.domain.models import (
-    Evidence, EvidenceStatus, EvidenceType, Lot, LotStatus, Product, SKU, Supplier, TraceEvent,
+    Evidence, EvidenceStatus, Lot, LotStatus, Product, SKU, Supplier, TraceEvent,
 )
 from rpv.provenance.adapters import EpcisExporter
 from rpv.provenance.repository import ProvenanceRepository, new_id
@@ -39,14 +41,6 @@ from rpv.util import json_dumps, stable_hash_hex
 from rpv.vision.calibration import CalibrationModel
 from rpv.vision.encoders import load_encoder
 from rpv.vision.prototypes import PrototypeBank
-
-OUTCOME_STYLE = {
-    "allow": ("✅", "CHO QUA"),
-    "allow_warning": ("⚠️", "CHO QUA — CÓ CẢNH BÁO"),
-    "assist": ("🙋", "CẦN NHÂN VIÊN XÁC NHẬN"),
-    "block": ("⛔", "CHẶN GIAO DỊCH"),
-}
-
 
 _STATE: dict = {}
 _BUILD_LOCK = threading.Lock()
@@ -64,7 +58,8 @@ def _build() -> dict:
     repo = ProvenanceRepository(app_config.settings.paths.db_path)
     repo.init_schema()
     service = CheckoutService(encoder, bank, repo, calibration,
-                              audit=AuditLog(app_config.settings.paths.audit_path), bank_path=app_config.settings.paths.bank_path)
+                              audit=AuditLog(app_config.settings.paths.audit_path), bank_path=app_config.settings.paths.bank_path,
+                              calibration_path=app_config.settings.paths.calib_path)
     return {"encoder": encoder, "bank": bank, "calib": service.calibration,
             "repo": repo, "service": service}
 
@@ -94,9 +89,11 @@ def _sku_choices() -> list[str]:
     return sorted({s.sku_id for s in st['repo'].list_skus()} | set(st['bank'].sku_ids))
 
 
-def _lot_choices() -> list[str]:
-    return [f"{r['lot_id']} ({r['sku_id']}, {r['status']})"
-            for r in _repo().list_lot_summaries()]
+def _lot_choices(sku_id: str | None = None) -> list[tuple[str, str]]:
+    labels = {'active': 'Đang sử dụng', 'quarantined': 'Tạm giữ', 'recalled': 'Thu hồi',
+              'expired': 'Hết hạn', 'sold_out': 'Đã hết'}
+    return [(f"{r['lot_id']} · {r['sku_id']} · {labels.get(r['status'], r['status'])}", r['lot_id'])
+            for r in _repo().list_lot_summaries() if not sku_id or r['sku_id'] == sku_id]
 
 
 def _lot_id(choice: str | None) -> str | None:
@@ -107,8 +104,19 @@ def _lot_id(choice: str | None) -> str | None:
 def intake(sku_id, sku_name, price, category, supplier_name, supplier_addr,
            origin_country, origin_region, farm, production_date, expiry_date,
            evidence_types, evidence_verified, images):
+    sku_id = (sku_id or '').strip()
     if not sku_id:
         return "Cần mã mặt hàng.", gr.update(), gr.update()
+    try:
+        price = float(price or 0)
+        if not math.isfinite(price) or price < 0:
+            raise ValueError('Giá phải là số hữu hạn, không âm.')
+        production = date.fromisoformat(production_date) if production_date else None
+        expiry = date.fromisoformat(expiry_date) if expiry_date else None
+        if production and expiry and expiry < production:
+            raise ValueError('Hạn sử dụng phải từ ngày sản xuất trở đi.')
+    except (ValueError, TypeError) as exc:
+        return f"Chưa thể lưu: kiểm tra giá và ngày theo định dạng YYYY-MM-DD. {exc}", gr.update(), gr.update()
     registered = _service().bank.entries.get(sku_id)
     guided = registered is not None and bool(registered.enrollment_id)
     if not images and not guided:
@@ -167,31 +175,15 @@ def intake(sku_id, sku_name, price, category, supplier_name, supplier_addr,
 # ---------- Tab 2: quầy thanh toán ----------
 def checkout(image, claimed_sku, claimed_lot, price, use_claim):
     if image is None:
-        return "Chưa có ảnh.", "{}"
+        return empty_result('Chưa có ảnh sản phẩm', 'Tải ảnh hoặc chụp bằng camera, sau đó bấm Kiểm tra mặt hàng.'), "{}"
+    if use_claim and not claimed_sku:
+        return empty_result('Chưa chọn mặt hàng', 'Chọn mã mặt hàng cần đối chiếu hoặc tắt chế độ đối chiếu mã khai báo.'), "{}"
     path = image if isinstance(image, str) else image.name
     resp = _service().process(path, claimed_sku=(claimed_sku if use_claim else None),
                            claimed_lot=_lot_id(claimed_lot) if use_claim else None,
                            claimed_price=float(price) if price else None, operator="staff_demo")
-    icon, title = OUTCOME_STYLE.get(resp.outcome, ("•", resp.outcome))
-    L = [f"## {icon} {title}", "", f"**Xuất xứ:** {resp.origin_summary}",
-         f"**Trạng thái hồ sơ:** `{resp.provenance_status}`", ""]
-    if resp.messages:
-        L.append("**Lý do:**")
-        L += [f"- {m}" for m in resp.messages]
-    else:
-        L.append("Không có cảnh báo nào.")
-    L += ["", f"**Mã lý do:** `{', '.join(resp.reasons)}`"]
-    rec = resp.recognition or {}
-    if rec.get("candidates"):
-        L += ["", "**Ứng viên thị giác:**", "", "| Mặt hàng | Khoảng cách | Trong tập hợp lệ |", "|---|---|---|"]
-        for c in rec["candidates"]:
-            L.append(f"| {c['label']} | {c['distance']:.4f} | {'có' if c['in_prediction_set'] else 'không'} |")
-    ver = resp.verification or {}
-    if ver:
-        L += ["", f"**Kiểm chứng lời khai:** `{ver.get('status')}` "
-                  f"(khoảng cách {ver.get('claimed_distance', 0):.4f} / ngưỡng {ver.get('threshold', 0):.4f})"]
-    L += ["", f"_Audit #{resp.audit.get('index')} · hash `{str(resp.audit.get('entry_hash'))[:16]}…`_"]
-    return "\n".join(L), json_dumps(resp.to_json())
+    payload = resp.to_json()
+    return render_checkout(payload), json_dumps(payload)
 
 
 # ---------- Tab 3: truy xuất ----------
@@ -224,7 +216,7 @@ def trace(lot_choice, want_epcis):
     if not rec.events:
         L.append("- _chưa có sự kiện nào_")
     missing = rec.missing_traceability_fields()
-    L += ["", ("✅ Đủ trường truy xuất tối thiểu (Thông tư 02/2024/TT-BKHCN)."
+    L += ["", ("✅ Đủ trường truy xuất tối thiểu trong hệ thống."
                if not missing else f"⚠️ Thiếu trường: {', '.join(missing)}")]
     payload = rec.to_json()
     if want_epcis:
@@ -262,107 +254,11 @@ def audit_view():
 
 
 def build_ui() -> gr.Blocks:
-    st = state()
-    encoder, bank, calib = st["encoder"], st["bank"], st["calib"]
-    cal_note = ("⚠️ **Chưa hiệu chỉnh.** Chạy `python -m rpv.cli calibrate` để hệ thống biết cách "
-                "từ chối hàng lạ. Khi chưa hiệu chỉnh, cần nhân viên xác nhận."
-                if calib is None else
-                f"Đã hiệu chỉnh · alpha={calib.alpha:g} · ngưỡng toàn cục={calib.global_threshold:.4f} "
-                f"· ngưỡng riêng cho {len(calib.per_class_threshold)} mặt hàng")
-
-    with gr.Blocks(title="RPV — Nhận diện & kiểm chứng nguồn gốc bán lẻ",
-                   theme=gr.themes.Soft()) as demo:
-        gr.Markdown(
-            "# RPV — Nhận diện sản phẩm không mã vạch + Kiểm chứng nguồn gốc\n"
-            "**Ảnh trả lời _đây là gì_. Hồ sơ lô trả lời _nó từ đâu_. "
-            "Hệ thống chỉ cho bán khi hai câu trả lời khớp nhau.**\n\n"
-            f"Encoder: `{encoder.tag}` · Danh mục: {len(bank)} mặt hàng · {cal_note}"
-        )
-        from app.enrollment import build_enrollment_tab
-        build_enrollment_tab(_service)
-        with gr.Tab("1. Nhập hàng (few-shot + hồ sơ lô)"):
-            gr.Markdown("Thêm mặt hàng mới bằng vài ảnh mẫu **và** khai hồ sơ nguồn gốc của lô. "
-                        "Đây là nơi dữ liệu xuất xứ thực sự được sinh ra.")
-            with gr.Row():
-                with gr.Column():
-                    sku_id = gr.Textbox(label="Mã mặt hàng (SKU)", placeholder="xoai_cat_hoa_loc")
-                    sku_name = gr.Textbox(label="Tên hiển thị", placeholder="Xoài cát Hòa Lộc")
-                    price = gr.Number(label="Giá (VND/kg)", value=42000)
-                    category = gr.Dropdown(["fresh_produce", "packaged", "default"],
-                                           value="fresh_produce", label="Nhóm hàng")
-                    images = gr.File(label="Ảnh mẫu (bỏ trống nếu SKU đã đăng ký có kiểm tra)", file_count="multiple",
-                                     file_types=["image"])
-                with gr.Column():
-                    supplier_name = gr.Textbox(label="Nhà cung cấp", placeholder="HTX Cao Lãnh")
-                    supplier_addr = gr.Textbox(label="Địa chỉ NCC", placeholder="Đồng Tháp")
-                    origin_country = gr.Dropdown(["VN", "US", "CN", "TH", "AU", "NZ", "JP", "KR", "UNKNOWN"],
-                                                 value="VN", label="Nước xuất xứ")
-                    origin_region = gr.Textbox(label="Vùng trồng/sản xuất", placeholder="Cao Lãnh, Đồng Tháp")
-                    farm = gr.Textbox(label="Nông trại/cơ sở đóng gói", placeholder="Nông trại Bảy Núi")
-                    production_date = gr.Textbox(label="Ngày sản xuất/thu hoạch (YYYY-MM-DD)",
-                                                 value=str(date.today() - timedelta(days=2)))
-                    expiry_date = gr.Textbox(label="Hạn sử dụng (YYYY-MM-DD)",
-                                             value=str(date.today() + timedelta(days=20)))
-                    evidence_types = gr.CheckboxGroup(
-                        [e.value for e in EvidenceType], label="Chứng từ kèm theo",
-                        value=[EvidenceType.DELIVERY_NOTE.value, EvidenceType.SUPPLIER_DECLARATION.value])
-                    evidence_verified = gr.Checkbox(label="Đã đối chiếu bản gốc (verified)", value=True)
-            btn = gr.Button("Đăng ký mặt hàng + lô hàng", variant="primary")
-            intake_out = gr.Markdown()
-
-        with gr.Tab("2. Quầy thanh toán"):
-            gr.Markdown("Chế độ kiểm chứng: khai mặt hàng rồi để hệ thống xác nhận hoặc phản đối. "
-                        "Thử khai sai mặt hàng để thấy hệ thống bắt được hành vi đổi mã.")
-            with gr.Row():
-                with gr.Column():
-                    co_image = gr.Image(label="Ảnh tại quầy", type="filepath")
-                    use_claim = gr.Checkbox(label="Có khai báo mặt hàng (chế độ kiểm chứng)", value=True)
-                    co_sku = gr.Dropdown(_sku_choices(), label="Mặt hàng khai báo", allow_custom_value=True)
-                    co_lot = gr.Dropdown(_lot_choices(), label="Lô hàng (bỏ trống = tự chọn lô active)",
-                                         allow_custom_value=True)
-                    co_price = gr.Number(label="Giá khai báo (VND)", value=None)
-                    co_btn = gr.Button("Kiểm tra và quyết định", variant="primary")
-                    refresh_catalog_btn = gr.Button('Tải lại mặt hàng và lô')
-                with gr.Column():
-                    co_out = gr.Markdown()
-                    co_json = gr.Code(label="Phản hồi đầy đủ (JSON)", language="json")
-
-        with gr.Tab("3. Truy xuất nguồn gốc"):
-            with gr.Row():
-                with gr.Column():
-                    tr_lot = gr.Dropdown(_lot_choices(), label="Chọn lô")
-                    tr_epcis = gr.Checkbox(label="Kèm bản xuất EPCIS 2.0 (JSON-LD)", value=False)
-                    tr_btn = gr.Button("Xem hồ sơ", variant="primary")
-                    gr.Markdown("---\n**Mô phỏng thu hồi/tạm giữ** để thấy policy phản ứng:")
-                    st_status = gr.Dropdown([s.value for s in LotStatus],
-                                            value=LotStatus.RECALLED.value, label="Trạng thái mới")
-                    st_note = gr.Textbox(label="Lý do", placeholder="Phát hiện dư lượng vượt ngưỡng")
-                    st_btn = gr.Button("Cập nhật trạng thái lô")
-                    st_out = gr.Markdown()
-                with gr.Column():
-                    tr_out = gr.Markdown()
-                    tr_json = gr.Code(label="Hồ sơ (JSON)", language="json")
-
-        with gr.Tab("4. Kiểm toán"):
-            gr.Markdown("Mọi quyết định đều được ghi vào chuỗi hash. Sửa hay xoá một dòng ở giữa "
-                        "sẽ làm đứt chuỗi và bị phát hiện — đó là điều kiện cần để hệ thống "
-                        "kiểm chứng nguồn gốc đáng tin.")
-            au_btn = gr.Button("Kiểm tra toàn vẹn chuỗi", variant="primary")
-            au_out = gr.Markdown()
-
-        btn.click(intake,
-                  [sku_id, sku_name, price, category, supplier_name, supplier_addr, origin_country,
-                   origin_region, farm, production_date, expiry_date, evidence_types,
-                   evidence_verified, images],
-                  [intake_out, co_sku, co_lot])
-        co_btn.click(checkout, [co_image, co_sku, co_lot, co_price, use_claim], [co_out, co_json])
-        refresh_catalog_btn.click(lambda: (gr.update(choices=_sku_choices()), gr.update(choices=_lot_choices())),
-                                  None, [co_sku, co_lot])
-        tr_btn.click(trace, [tr_lot, tr_epcis], [tr_out, tr_json])
-        st_btn.click(set_status, [tr_lot, st_status, st_note], [st_out, tr_lot])
-        au_btn.click(audit_view, None, au_out)
-        return demo
+    from app.ui import build_demo
+    return build_demo(_service, _sku_choices, _lot_choices, intake, checkout, trace, set_status, audit_view)
 
 
 if __name__ == "__main__":
-    build_ui().launch(server_name=os.getenv('GRADIO_SERVER_NAME', '127.0.0.1'), server_port=7860)
+    from app.ui import launch_options
+    build_ui().launch(server_name=os.getenv('GRADIO_SERVER_NAME', '127.0.0.1'),
+                      server_port=int(os.getenv('GRADIO_SERVER_PORT', '7860')), **launch_options())

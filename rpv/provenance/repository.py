@@ -48,8 +48,8 @@ class ProvenanceRecord:
     def found(self) -> bool:
         return self.lot is not None
 
-    def verified_evidence_types(self) -> set[str]:
-        today = date.today()
+    def verified_evidence_types(self, today: date | None = None) -> set[str]:
+        today = today or date.today()
         return {e.evidence_type for e in self.evidence if e.is_currently_valid(today)}
 
     def missing_traceability_fields(self) -> list[str]:

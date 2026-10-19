@@ -104,5 +104,5 @@ python -m ruff check rpv api app scripts tests
 
 Các test dùng dữ liệu tạm. `scripts/smoke_thesis.py` và
 `scripts/smoke_enrollment.py` là kiểm tra nhanh có tạo đầu ra trong `var/`,
-không phải benchmark khóa luận. `scripts/clean_caches.py --dry-run` chỉ liệt
-kê cache Python/linter có thể dọn; không reset model, DB hoặc dataset.
+không phải benchmark khóa luận. Vector backbone lưu tại `var/embed_cache/`
+và được giữ khi train lại head; xem `python scripts/cache_embeddings.py`.

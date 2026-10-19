@@ -2,6 +2,10 @@
 
 Thiết kế model: [kiến trúc](ARCHITECTURE.md). Lệnh thực thi: [huấn luyện và đánh giá](TRAINING.md).
 
+Các bổ sung theo nhận xét 17/09/2026: [đối chiếu yêu cầu, công thức policy,
+Energy và ngưỡng risk](REVIEW_CHANGES.md). Cơ sở pháp lý/nghiệp vụ trình bày
+riêng tại [LEGAL_BUSINESS](LEGAL_BUSINESS.md); sơ đồ 7 bảng tại [DATABASE](DATABASE.md).
+
 ## Hai thư mục 70/30
 
 ```text
@@ -102,14 +106,18 @@ hoặc một tập ảnh chụp độc lập để đánh giá khả năng tổn
 
 - Coverage = tỷ lệ nhãn đúng nằm trong tập dự đoán. Tỷ lệ tập không rỗng được
   lưu dưới tên khác. Báo thêm kích thước tập, số singleton và accuracy singleton.
-- Open-set dùng cùng score `min distance tới prototype` cho cả known/unknown.
-  Global threshold được chọn từ nearest-distance của known-calib. ROC của
-  score và tỷ lệ từ chối thực tế của recognizer dùng ngưỡng theo lớp được
-  phân biệt trong báo cáo.
+- Open-set mặc định dùng Energy từ logits −distance² cho cả known/unknown,
+  ngưỡng chọn từ known-calib. `distance_baseline` giữ phép đo nearest-distance
+  để đối chiếu. Gate thực tế kết hợp Energy, tập conformal singleton và
+  ngưỡng selective risk; tỷ lệ từ chối cuối được báo riêng với ROC của score.
 - Verifier FAR/FRR được báo riêng cho lời khai sai ngẫu nhiên và SKU sai gần
   nhất. FAR verifier không đồng nghĩa tỷ lệ policy tự động cho phép thanh toán.
 - Risk–coverage xét tất cả các ngưỡng phân biệt và không chia đôi nhóm score
   bằng nhau. EER dùng tìm kiếm trên score đã sắp xếp để tránh chi phí bậc hai.
+- Ngưỡng selective risk 1% được fit trên known-calibration và khóa trước
+  test. Báo risk/coverage thực tế tại ngưỡng đó; điểm coverage-at-risk trên
+  đường cong test là mô tả, không dùng để chọn ngưỡng triển khai. Báo cáo
+  xuất CSV, SVG và PNG của đường cong để đưa vào luận văn.
 - Score conformal được giữ đủ độ chính xác. Nếu không đủ mẫu cho thứ hạng
   yêu cầu, ngưỡng là vô hạn; serialization JSON giữ được ý nghĩa này khi đọc lại.
 - Ngưỡng theo lớp chỉ dùng khi đủ `RPV_MIN_CALIB` ảnh calibration; các lớp
@@ -172,11 +180,12 @@ Chi tiết ngân sách ảnh và điều kiện: [đăng ký mặt hàng](ENROLL
 | Chương | Nội dung | Bằng chứng cần có |
 |---|---|---|
 | 1 | Bài toán, người dùng, phạm vi và câu hỏi nghiên cứu | Kịch bản quầy và nhu cầu được khảo sát |
-| 2 | DINOv2, prototype, episodic learning, open-set và conformal | Tài liệu gốc, giả định, định nghĩa metric |
-| 3 | Dữ liệu và giao thức | Nguồn ảnh, alias, ảnh trùng, nhóm chụp, manifest 70/30 |
-| 4 | Hiện thực hệ thống | Encoder/head, prototype, đăng ký có kiểm tra, policy và audit |
-| 5 | Thực nghiệm | Baseline/head, unknown và novel, ablation, đăng ký trước/sau |
-| 6 | Thảo luận và kết luận | Cặp nhầm, giới hạn dữ liệu, chi phí vận hành, phần chưa kiểm chứng |
+| 2 | Cơ sở pháp lý và nghiệp vụ bán lẻ Việt Nam | Phạm vi NĐ 43/2017, NĐ 111/2021; truy xuất theo TT 02/2024; quy trình cửa hàng |
+| 3 | Cơ sở lý thuyết và nghiên cứu liên quan | DINOv2, prototype, Energy OOD, conformal, selective risk; tài liệu gốc và giả định |
+| 4 | Dữ liệu và giao thức | Nguồn ảnh, alias, nhóm chụp, manifest 70/30, test điều kiện túi/lưới/độ chín, hard negative |
+| 5 | Hiện thực hệ thống | Decision(I,S,L), 4 trạng thái, sơ đồ 7 bảng, đăng ký có kiểm tra, policy và audit |
+| 6 | Thực nghiệm theo Q1–Q4 | Baseline/head, Energy/distance, risk tại ngưỡng đã khóa, image-only/full-policy, latency POS |
+| 7 | Thảo luận và kết luận | Cặp nhầm, giới hạn dữ liệu, lô vật lý, chi phí vận hành, risk/latency chưa đạt nếu có |
 
 ## Trả lời các phản biện chính
 

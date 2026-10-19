@@ -2,7 +2,7 @@
 # docker compose -f docker-compose.yml -f docker-compose.trained.yml up --build -d api demo
 x-trained-volumes: &trained-volumes
   - type: bind
-    source: ./var/thesis
+    source: ./var/thesis_v4
     target: /data
     bind:
       create_host_path: false
@@ -12,6 +12,11 @@ x-trained-volumes: &trained-volumes
     read_only: true
     bind:
       create_host_path: false
+  - type: bind
+    source: ./var/embed_cache
+    target: /data/embed_cache
+    bind:
+      create_host_path: false
 
 services:
   api:
@@ -19,12 +24,46 @@ services:
     environment:
       RPV_PROJECTION_CKPT: /data/projection_head.pt
       RPV_RESIZE_MODE: pad
-      RPV_IMAGE_SIZE: "224"
-      RPV_TTA: "1"
+      RPV_IMAGE_SIZE: "336"
+      RPV_TTA: "0"
+      RPV_CATALOG_BACKEND: prototype
+      RPV_PROTOTYPE_COLOR_WEIGHT: "${RPV_PROTOTYPE_COLOR_WEIGHT:-0}"
+      RPV_DECISION_RULE: "${RPV_DECISION_RULE:-conformal}"
+      RPV_ALPHA: "${RPV_ALPHA:-0.10}"
+      RPV_CONFIDENCE_METHOD: "${RPV_CONFIDENCE_METHOD:-nearest_ratio}"
+      RPV_RISK_CALIBRATION: six_extra_cal
+      RPV_CONFORMAL_SCORE: relative
+      RPV_OOD_METHOD: energy
+      RPV_ENERGY_TEMPERATURE: "${RPV_ENERGY_TEMPERATURE:-0.05}"
+      RPV_TARGET_KNOWN_RECALL: "${RPV_TARGET_KNOWN_RECALL:-0.90}"
+      RPV_TARGET_RISK: "${RPV_TARGET_RISK:-0.049}"
+      RPV_TRAINING_PROTOCOL: catalog_grouped
+      RPV_CLASS_SPLIT_SEED: "1"
+      RPV_CALIB_TEST_SEED: "401"
+      RPV_K_SHOT: "2"
+      RPV_CENTROIDS: "${RPV_CENTROIDS:-1}"
+      RPV_DEVICE: cpu
   demo:
     volumes: *trained-volumes
     environment:
       RPV_PROJECTION_CKPT: /data/projection_head.pt
       RPV_RESIZE_MODE: pad
-      RPV_IMAGE_SIZE: "224"
-      RPV_TTA: "1"
+      RPV_IMAGE_SIZE: "336"
+      RPV_TTA: "0"
+      RPV_CATALOG_BACKEND: prototype
+      RPV_PROTOTYPE_COLOR_WEIGHT: "${RPV_PROTOTYPE_COLOR_WEIGHT:-0}"
+      RPV_DECISION_RULE: "${RPV_DECISION_RULE:-conformal}"
+      RPV_ALPHA: "${RPV_ALPHA:-0.10}"
+      RPV_CONFIDENCE_METHOD: "${RPV_CONFIDENCE_METHOD:-nearest_ratio}"
+      RPV_RISK_CALIBRATION: six_extra_cal
+      RPV_CONFORMAL_SCORE: relative
+      RPV_OOD_METHOD: energy
+      RPV_ENERGY_TEMPERATURE: "${RPV_ENERGY_TEMPERATURE:-0.05}"
+      RPV_TARGET_KNOWN_RECALL: "${RPV_TARGET_KNOWN_RECALL:-0.90}"
+      RPV_TARGET_RISK: "${RPV_TARGET_RISK:-0.049}"
+      RPV_TRAINING_PROTOCOL: catalog_grouped
+      RPV_CLASS_SPLIT_SEED: "1"
+      RPV_CALIB_TEST_SEED: "401"
+      RPV_K_SHOT: "2"
+      RPV_CENTROIDS: "${RPV_CENTROIDS:-1}"
+      RPV_DEVICE: cpu

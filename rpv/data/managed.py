@@ -53,6 +53,26 @@ def staging_directory(parent):
             shutil.rmtree(path)
 
 
+def _publish_dataset(staging, destination):
+    """Publish once; tolerate short Windows sharing locks without replacing data."""
+    import time
+    staging, destination = Path(staging).resolve(), Path(destination).resolve()
+    if staging.parent.parent != destination.parent or not staging.parent.name.startswith('rpv_prepare_'):
+        raise ValueError('Dataset staging must stay inside the destination parent.')
+    for attempt in range(5):
+        if destination.exists():
+            raise ValueError(f'Đích đã tồn tại: {destination}. Không ghi đè dataset.')
+        try:
+            staging.rename(destination)
+            return
+        except PermissionError as exc:
+            # Windows scanners can briefly hold new files open. A real ACL
+            # failure is still raised after a bounded 0.75-second retry window.
+            if getattr(exc, 'winerror', None) not in {5, 32, 33} or attempt == 4:
+                raise
+            time.sleep(.05 * 2 ** attempt)
+
+
 def prepare_dataset(source, destination, known_ratio=0.7, seed=1, groups_csv=None, workers=8):
     """Copy into a new directory; source files are never moved or overwritten.
 
@@ -154,7 +174,7 @@ def prepare_dataset(source, destination, known_ratio=0.7, seed=1, groups_csv=Non
                 if count % 5000 == 0:
                     log(f'[prepare] copied {count}/{len(records)}')
         (staging / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-        staging.rename(destination)
+        _publish_dataset(staging, destination)
     return {k: v for k, v in manifest.items() if k not in {'records', 'duplicates_excluded'}} | {
         'destination': str(destination), 'n_images': len(records), 'n_duplicates_excluded': len(duplicates)}
 
@@ -168,6 +188,12 @@ def read_managed_dataset(root):
     expected = manifest.pop('fingerprint')
     if manifest.get('schema_version') != 1 or fingerprint(manifest) != expected:
         raise ValueError('Manifest sai phiên bản hoặc đã thay đổi; tạo một dataset version mới.')
+    known = set(manifest['known_classes'])
+    unknown = set(manifest['unknown_classes'])
+    if (not known or not unknown or known & unknown
+            or len(known) != len(manifest['known_classes'])
+            or len(unknown) != len(manifest['unknown_classes'])):
+        raise ValueError('Danh sách lớp known/unknown phải không rỗng, không trùng và tách biệt.')
     result = DatasetIndex(unknown_classes=manifest['unknown_classes'], fingerprint=expected,
                           grouping=manifest['grouping'])
     def check_record(record):
@@ -187,7 +213,11 @@ def read_managed_dataset(root):
             raise ValueError('Manifest có ảnh trùng nội dung.')
         seen.add(record['sha256'])
         label = record['label']
+        if label not in known | unknown:
+            raise ValueError('Record có nhãn ngoài danh sách lớp của manifest.')
         pool = 'unknown' if label in result.unknown_classes else 'known'
+        if record.get('pool') != pool:
+            raise ValueError('Pool trong record không khớp danh sách lớp known/unknown.')
         if path.relative_to(root).parts[:2] != (pool, label):
             raise ValueError('Pool hoặc nhãn không khớp đường dẫn trong manifest.')
         # A group shared across classes would need a joint grouped splitter;
@@ -202,6 +232,8 @@ def read_managed_dataset(root):
               if p.is_file() and p.suffix.lower() in IMAGE_EXT}
     if actual != {Path(p) for ps in result.values() for p in ps}:
         raise ValueError('Có ảnh ngoài manifest. Tạo dataset version mới để cập nhật dữ liệu.')
+    if set(result) != known | unknown:
+        raise ValueError('Manifest có lớp không chứa ảnh hoặc thiếu record cho lớp đã khai báo.')
     return result
 
 

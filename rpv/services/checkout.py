@@ -9,6 +9,7 @@ trong luận văn đo đúng thứ chạy ở demo.
 from __future__ import annotations
 
 import uuid
+from time import perf_counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +43,8 @@ class CheckoutResponse:
     enrichment: Optional[dict] = None
     audit: dict = field(default_factory=dict)
     created_at: str = ""
+    decision_state: str = 'abstain'
+    timings_ms: dict = field(default_factory=dict)
 
     def to_json(self) -> dict:
         return {
@@ -58,6 +61,8 @@ class CheckoutResponse:
             "enrichment": self.enrichment,
             "audit": self.audit,
             "created_at": self.created_at,
+            'decision_state': self.decision_state,
+            'timings_ms': self.timings_ms,
         }
 
     def human_summary(self) -> str:
@@ -82,11 +87,14 @@ class CheckoutService:
                  policy: PolicyEngine | None = None,
                  audit: AuditLog | None = None,
                  external_adapter: Any | None = None,
-                 bank_path: str | Path | None = None) -> None:
+                 bank_path: str | Path | None = None,
+                 calibration_path: str | Path | None = None) -> None:
         self.encoder = encoder
         self.bank = bank
         self.repo = repo
         self.bank_path = Path(bank_path) if bank_path else None
+        self.calibration_path = Path(calibration_path) if calibration_path else None
+        self._calibration_stamp = -1
         # The caller may have loaded a bank just before another process saved it.
         # Force a refresh on first use instead of stamping possibly stale memory.
         self._bank_stamp = -1 if self.bank_path and self.bank_path.exists() else None
@@ -120,22 +128,33 @@ class CheckoutService:
         hàng). Có ``claimed_sku`` là chế độ kiểm chứng lời khai — chế độ đúng của
         quầy tự thanh toán và là chế độ được đánh giá chính trong luận văn.
         """
+        started = perf_counter()
         self.refresh_catalog()
         request_id = f"req_{uuid.uuid4().hex[:12]}"
         created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
         verification: Optional[VerificationResult] = None
 
+        vision_started = perf_counter()
         embedding = self.encoder.embed_path(image_path)
         img_hash = image_sha256(image_path)
 
-        recognition = self.recognizer.recognize_embedding(embedding, img_hash)
-        if claimed_sku and self.verifier is not None:
-            verification = self.verifier.verify_embedding(embedding, claimed_sku, img_hash)
+        with self.bank._lock:
+            self.refresh_catalog()
+            recognition = self.recognizer.recognize_embedding(embedding, img_hash)
+            if claimed_sku and self.verifier is not None:
+                verification = self.verifier.verify_embedding(embedding, claimed_sku, img_hash)
+            resolved_sku = claimed_sku or (recognition.prediction_set[0] if recognition.is_confident
+                                          else (recognition.top1.sku_id if recognition.top1 else ''))
+            review_skus = set(recognition.prediction_set) | {resolved_sku}
+            enrollment_review = any(s in self.bank.entries and self.bank.entries[s].requires_operator
+                                    for s in review_skus)
+            calibration_alpha = self.calibration.alpha if self.calibration else None
+        vision_ms = (perf_counter() - vision_started) * 1000
+        policy_started = perf_counter()
 
         # SKU dùng để tra hồ sơ: ưu tiên lời khai (vì hồ sơ gắn với lời khai,
         # và chúng ta đang kiểm chứng lời khai đó), nếu không có thì lấy top-1.
-        resolved_sku = claimed_sku or (recognition.top1.sku_id if recognition.top1 else "")
         record: Optional[ProvenanceRecord] = None
         if resolved_sku:
             record = self.repo.resolve(resolved_sku, claimed_lot)
@@ -144,13 +163,14 @@ class CheckoutService:
             recognition=recognition, verification=verification, record=record,
             claimed_price=claimed_price,
         )
-        review_skus = set(recognition.prediction_set) | {resolved_sku}
-        if any(s in self.bank.entries and self.bank.entries[s].requires_operator for s in review_skus):
+        if enrollment_review:
             if decision.outcome != 'block':
                 decision.outcome = 'assist'
             decision.requires_operator = True
             decision.reasons.append('enrollment_review_required')
             decision.messages.append('Mặt hàng mới cần nhân viên xác nhận; kiểm tra đăng ký chưa cho phép bán tự động.')
+            decision.decision_state = 'abstain'
+        policy_ms = (perf_counter() - policy_started) * 1000
 
         enrichment = None
         if enrich and record and record.sku and record.sku.gtin:
@@ -172,9 +192,10 @@ class CheckoutService:
             verification_status=verification.status if verification else "",
             provenance_status=decision.provenance_status,
             encoder_tag=self.encoder.tag,
-            calibration_alpha=self.calibration.alpha if self.calibration else None,
+            calibration_alpha=calibration_alpha,
             operator=operator,
-            payload={"audit_notes": decision.audit_notes},
+            payload={"audit_notes": decision.audit_notes, 'decision_state': decision.decision_state,
+                     'timings_ms': {'vision_search': vision_ms, 'policy_lookup': policy_ms}},
         )
         self.repo.record_decision(record_row)
         entry = self.audit.append("checkout_decision", {
@@ -182,6 +203,8 @@ class CheckoutService:
             "reasons": decision.reasons, "claimed_sku": claimed_sku or "",
             "resolved_lot": record_row.resolved_lot, "encoder_tag": self.encoder.tag,
             "operator": operator,
+            'decision_state': decision.decision_state,
+            'decision_inputs': decision.audit_notes.get('decision_inputs', {}),
         })
 
         # Ghi sự kiện bán hàng vào chuỗi truy xuất khi giao dịch được cho qua.
@@ -202,26 +225,48 @@ class CheckoutService:
             enrichment=enrichment,
             audit={"index": entry.index, "entry_hash": entry.entry_hash, "prev_hash": entry.prev_hash},
             created_at=created_at,
+            decision_state=decision.decision_state,
+            timings_ms={'vision_search': vision_ms, 'policy_lookup': policy_ms,
+                        'total': (perf_counter() - started) * 1000},
         )
 
     # -- đăng ký sản phẩm mới ---------------------------------------------
     def refresh_catalog(self):
+        validate = getattr(self.encoder, 'validate_artifacts', None)
+        if validate is not None:
+            validate()
+        with self.bank._lock:
+            self._refresh_catalog()
+
+    def _refresh_catalog(self):
+        calibration_stamp = (self.calibration_path.stat().st_mtime_ns
+                             if self.calibration_path and self.calibration_path.exists() else None)
+        calibration_changed = self.calibration_path is not None and calibration_stamp != self._calibration_stamp
         if not self.bank_path:
-            return
-        if not self.bank_path.exists():
+            bank_changed = False
+        elif not self.bank_path.exists():
             if self._bank_stamp is not None:
                 raise FileNotFoundError(f'Danh mục đang dùng đã bị xóa: {self.bank_path}')
-            return
-        stamp = self.bank_path.stat().st_mtime_ns
-        if stamp == self._bank_stamp:
+            bank_changed = False
+        else:
+            stamp = self.bank_path.stat().st_mtime_ns
+            bank_changed = stamp != self._bank_stamp
+        if not bank_changed and not calibration_changed:
             return
         with self.bank._lock:
-            self.bank.load(self.bank_path)
+            if bank_changed:
+                self.bank.load(self.bank_path)
+            if calibration_changed:
+                self.calibration = (CalibrationModel.load(self.calibration_path, self.encoder.tag)
+                                    if calibration_stamp is not None else None)
             if self.calibration and self.calibration.bank_fingerprint != self.bank.fingerprint():
                 self.calibration = None
             self.recognizer = Recognizer(self.encoder, self.bank, self.calibration)
             self.verifier = Verifier(self.encoder, self.bank, self.calibration) if self.calibration else None
-            self._bank_stamp = stamp
+            if bank_changed:
+                self._bank_stamp = stamp
+            if calibration_changed:
+                self._calibration_stamp = calibration_stamp
 
     @property
     def enrollment(self):

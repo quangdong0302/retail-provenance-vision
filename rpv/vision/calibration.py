@@ -15,8 +15,12 @@ so với một classifier thông thường. Ba cơ chế, dùng cùng lúc:
    nhận. Đây là ngôn ngữ đúng để nói về rủi ro ở quầy thanh toán, thay cho
    confidence softmax vốn nổi tiếng overconfident với input lạ.
 
-3. **Ngưỡng toàn cục theo ràng buộc nghiệp vụ.** Chọn trên tập calib sao cho
-   known-recall >= target, rồi tối đa hoá tỉ lệ chặn hàng lạ.
+3. **Ngưỡng toàn cục theo ràng buộc nghiệp vụ.** Chọn ngưỡng nhỏ nhất trên
+   known-calib đạt known-recall mục tiêu; đánh giá hàng lạ riêng trên test.
+
+Artifact mới còn lưu Energy OOD và gate selective risk fit trên known-calib.
+Chỉ phần tập conformal gốc có diễn giải coverage conformal; các gate kết hợp
+phải báo risk/coverage thực tế, không tự kế thừa bảo đảm đó.
 
 Mô hình hiệu chỉnh còn lưu lại PHÂN BỐ điểm nonconformity trên tập calib của
 từng lớp. Nhờ vậy lúc kiểm chứng tính được p-value conformal đúng nghĩa
@@ -31,6 +35,8 @@ báo cáo phải đo trên tập test rời hẳn. Chọn ngưỡng rồi báo c
 from __future__ import annotations
 
 import json
+import os
+import threading
 from bisect import bisect_left
 from dataclasses import dataclass, field, asdict, fields as dataclass_fields
 from pathlib import Path
@@ -40,6 +46,7 @@ import numpy as np
 
 from rpv import config as app_config
 from rpv.util import json_dumps
+from rpv.vision.rejection import energy_score
 
 def _digest_scores(scores: Sequence[float]) -> list[float]:
     """Keep all scores at full precision; compression changes conformal ranks."""
@@ -66,6 +73,47 @@ class CalibrationModel:
     calib_scores: dict[str, list[float]] = field(default_factory=dict)
     global_calib_scores: list[float] = field(default_factory=list)
     bank_fingerprint: str = ""
+    ood: dict = field(default_factory=dict)
+    risk_control: dict = field(default_factory=dict)
+    conformal_score: str = 'distance'
+    development_fingerprint: str = ''
+    decision_rule: str = 'conformal'
+
+    def nonconformity(self, distances: dict[str, float]) -> dict[str, float]:
+        if self.conformal_score == 'distance':
+            return dict(distances)
+        if self.conformal_score != 'relative':
+            raise ValueError('Unsupported conformal score.')
+        if len(distances) < 2:
+            raise ValueError('Relative conformal requires at least two catalog classes.')
+        return {s: float(np.float32(d) / max(np.float32(min(v for k,v in distances.items() if k != s)), np.float32(1e-9)))
+                for s,d in distances.items()}
+
+    def confidence(self, distances: dict[str, float]) -> float:
+        method = self.risk_control.get('confidence_method', 'energy')
+        if method == 'energy':
+            return -self.ood_score(distances)
+        if method == 'nearest_ratio':
+            values = sorted(distances.values())
+            if len(values) < 2:
+                raise ValueError('Nearest-ratio requires at least two classes.')
+            # Preserve float32 arithmetic used by the frozen research recipe.
+            return float(np.float32(1) - np.float32(values[0]) / max(np.float32(values[1]), np.float32(1e-9)))
+        raise ValueError('Unsupported selective confidence method.')
+
+    def ood_score(self, distances: dict[str, float]) -> float:
+        if self.ood.get('method') == 'energy':
+            return energy_score(distances, self.ood['temperature'])
+        return float(min(distances.values()))
+
+    def is_ood(self, distances: dict[str, float]) -> bool:
+        return bool(self.ood and self.ood_score(distances) > self.ood['threshold'])
+
+    def risk_accepts(self, distances: dict[str, float]) -> bool:
+        if not self.risk_control.get('enabled'):
+            return True
+        threshold = self.risk_control.get('confidence_threshold')
+        return threshold is not None and self.confidence(distances) >= threshold
 
     def threshold_for(self, sku_id: str) -> float:
         """Ngưỡng "bán kính chấp nhận" theo phân vị 1-alpha của lớp.
@@ -115,12 +163,51 @@ class CalibrationModel:
     def save(self, path: str | Path) -> Path:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json_dumps(self.to_json()), encoding="utf-8")
+        tmp = path.with_name(path.name + f'.{os.getpid()}.{threading.get_ident()}.tmp')
+        try:
+            tmp.write_text(json_dumps(self.to_json()), encoding='utf-8')
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
         return path
 
     @staticmethod
     def load(path: str | Path, encoder_tag: str | None = None) -> "CalibrationModel":
         model = CalibrationModel.from_json(json.loads(Path(path).read_text(encoding="utf-8")))
+        if model.conformal_score not in {'distance', 'relative'}:
+            raise ValueError('Unsupported conformal score in calibration artifact.')
+        if model.risk_control.get('confidence_method', 'energy') not in {'energy', 'nearest_ratio'}:
+            raise ValueError('Unsupported selective confidence in calibration artifact.')
+        if model.decision_rule not in {'conformal', 'prototype_selective'}:
+            raise ValueError('Unsupported decision rule.')
+        if not isinstance(model.encoder_tag, str) or not model.encoder_tag or not isinstance(model.bank_fingerprint, str):
+            raise ValueError('Calibration có định danh encoder/bank không hợp lệ.')
+        if not isinstance(model.alpha, (int, float)) or not np.isfinite(model.alpha) or not 0 < model.alpha < 1:
+            raise ValueError('Calibration alpha phải hữu hạn, trong (0,1).')
+        radii = [model.global_threshold, model.global_conformal_quantile,
+                 *model.per_class_threshold.values(), *model.conformal_quantile.values()]
+        if any(not isinstance(v, (int, float)) or np.isnan(v) or v < 0 for v in radii):
+            raise ValueError('Calibration có bán kính không hợp lệ; không được dùng ngưỡng NaN/âm.')
+        for scores in [model.global_calib_scores, *model.calib_scores.values()]:
+            values = np.asarray(scores, dtype=float)
+            if (values.ndim != 1 or not np.isfinite(values).all() or np.any(values < 0)
+                    or np.any(values[1:] < values[:-1])):
+                raise ValueError('Phân bố score calibration phải hữu hạn, không âm và đã sắp xếp.')
+        if model.ood:
+            if model.ood.get('method') not in {'energy', 'distance'}:
+                raise ValueError('Calibration chứa phương pháp OOD không được hỗ trợ.')
+            threshold = model.ood.get('threshold')
+            if not isinstance(threshold, (int, float)) or not np.isfinite(threshold):
+                raise ValueError('Ngưỡng OOD phải hữu hạn.')
+            temperature = model.ood.get('temperature', .05)
+            if not isinstance(temperature, (int, float)) or not np.isfinite(temperature) or temperature <= 0:
+                raise ValueError('Energy temperature phải hữu hạn và > 0.')
+        if model.risk_control:
+            enabled = model.risk_control.get('enabled')
+            threshold = model.risk_control.get('confidence_threshold')
+            if type(enabled) is not bool or (threshold is not None and
+                    (not isinstance(threshold, (int, float)) or not np.isfinite(threshold))):
+                raise ValueError('Risk gate có trạng thái hoặc ngưỡng không hợp lệ.')
         if encoder_tag is not None and model.encoder_tag != encoder_tag:
             raise RuntimeError(
                 f"Calibration tại '{path}' thuộc encoder {model.encoder_tag!r}, "

@@ -7,7 +7,7 @@ hơn nhiều so với việc đoán chắc chắn một nhãn sai.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Sequence
 
@@ -23,6 +23,17 @@ STATUS_MATCH = "match"            # đúng 1 ứng viên trong tập conformal
 STATUS_AMBIGUOUS = "ambiguous"    # nhiều ứng viên hợp lệ -> cần người chọn
 STATUS_UNKNOWN = "unknown"        # tập rỗng -> ngoài danh mục
 STATUS_EMPTY_CATALOG = "empty_catalog"
+
+
+def validate_distances(bank, calibration, distances):
+    if calibration and calibration.bank_fingerprint and calibration.bank_fingerprint != bank.fingerprint():
+        raise RuntimeError('Danh mục đã đổi sau khi hiệu chỉnh; không được dùng ngưỡng cũ.')
+    if set(distances) != set(bank.sku_ids):
+        raise ValueError('Khoảng cách phải chứa đúng toàn bộ danh mục, kể cả khi đầu vào rỗng.')
+    if distances:
+        values = np.asarray(list(distances.values()), dtype=float)
+        if not np.isfinite(values).all() or np.any(values < 0):
+            raise ValueError('Khoảng cách phải hữu hạn, không âm và chứa đúng toàn bộ danh mục.')
 
 
 @dataclass
@@ -48,6 +59,12 @@ class RecognitionResult:
     alpha: float = 0.0
     top1: Candidate | None = None
     note: str = ""
+    ood_score: float | None = None
+    ood_threshold: float | None = None
+    rejection_reason: str = ""
+    conformal_prediction_set: list[str] = field(default_factory=list)
+    decision_rule: str = 'conformal'
+    score_semantics: str = 'euclidean_distance'
 
     @property
     def is_confident(self) -> bool:
@@ -64,6 +81,12 @@ class RecognitionResult:
             "encoder_tag": self.encoder_tag,
             "alpha": self.alpha,
             "note": self.note,
+            "ood_score": self.ood_score,
+            "ood_threshold": self.ood_threshold,
+            "rejection_reason": self.rejection_reason,
+            'conformal_prediction_set': self.conformal_prediction_set,
+            'decision_rule': self.decision_rule,
+            'score_semantics': self.score_semantics,
         }
 
 
@@ -88,10 +111,15 @@ class Recognizer:
 
     # -- lõi ---------------------------------------------------------------
     def recognize_embedding(self, embedding: np.ndarray, image_hash: str = "") -> RecognitionResult:
-        dists = self.bank.distances(embedding)
-        return self.recognize_distances(dists, image_hash)
+        with self.bank._lock:
+            return self.recognize_distances(self.bank.distances(embedding), image_hash)
 
     def recognize_distances(self, dists: dict[str, float], image_hash: str = "") -> RecognitionResult:
+        with self.bank._lock:
+            validate_distances(self.bank, self.calibration, dists)
+            return self._recognize_distances(dists, image_hash)
+
+    def _recognize_distances(self, dists: dict[str, float], image_hash: str = "") -> RecognitionResult:
         if not dists:
             return RecognitionResult(
                 status=STATUS_EMPTY_CATALOG, candidates=[], prediction_set=[],
@@ -101,30 +129,51 @@ class Recognizer:
         alpha = self.calibration.alpha if self.calibration else 0.0
         pred_set: list[str] = []
         cands: list[Candidate] = []
+        scores = self.calibration.nonconformity(dists) if self.calibration else dists
         for sku, dist in sorted(dists.items(), key=lambda kv: (kv[1], kv[0])):
             if self.calibration is None:
                 inside, thr, pval = True, float("inf"), float("nan")
             else:
                 thr = self.calibration.quantile_for(sku)
-                inside = dist <= thr
-                pval = self.calibration.p_value(sku, dist)
+                inside = scores[sku] <= thr
+                pval = self.calibration.p_value(sku, scores[sku])
             if inside:
                 pred_set.append(sku)
             cands.append(Candidate(
                 sku_id=sku,
                 label=self.bank.entries[sku].label or sku,
                 distance=float(dist),
-                normalized_score=float(dist / thr) if math.isfinite(thr) and thr > 0 else float("nan"),
+                normalized_score=float(scores[sku] / thr) if math.isfinite(thr) and thr > 0 else float("nan"),
                 in_prediction_set=inside,
                 p_value=float(pval),
             ))
+        conformal_set = list(pred_set)
+        selective = bool(self.calibration and self.calibration.decision_rule == 'prototype_selective')
+        tied = False
+        if selective:
+            ordered = sorted(dists, key=lambda s: (dists[s], s))
+            tied = len(ordered) > 1 and abs(dists[ordered[0]] - dists[ordered[1]]) <= 1e-8
+            pred_set = [] if tied else ordered[:1]
+            for candidate in cands:
+                candidate.in_prediction_set = candidate.sku_id in pred_set
+        rejected_ood = bool(self.calibration and self.calibration.is_ood(dists))
+        rejected_risk = bool(self.calibration and (not self.calibration.risk_accepts(dists)
+                             or (selective and not self.calibration.risk_control.get('enabled'))))
+        if rejected_ood:
+            pred_set = []
+            for candidate in cands:
+                candidate.in_prediction_set = False
         # Keep the nearest top_k plus every accepted SKU, in distance order.
         if self.top_k:
             cands = [c for i, c in enumerate(cands) if i < self.top_k or c.in_prediction_set]
         if self.calibration is None:
             status, note = STATUS_AMBIGUOUS, 'Chưa hiệu chỉnh ngưỡng; cần calibrate trước khi tự động nhận diện.'
+        elif tied:
+            status, note = STATUS_AMBIGUOUS, 'Hai prototype gần nhất đồng hạng; cần nhân viên xác nhận.'
         elif not pred_set:
             status, note = STATUS_UNKNOWN, "Không SKU nào nằm trong bán kính chấp nhận đã hiệu chỉnh."
+        elif rejected_risk:
+            status, note = STATUS_AMBIGUOUS, 'Chưa đạt ngưỡng rủi ro đã hiệu chỉnh; cần nhân viên xác nhận.'
         elif len(pred_set) == 1:
             if self.bank.entries[pred_set[0]].requires_operator:
                 status, note = STATUS_AMBIGUOUS, 'Mặt hàng đăng ký có hướng dẫn; cần nhân viên xác nhận.'
@@ -137,6 +186,16 @@ class Recognizer:
             status=status, candidates=cands, prediction_set=pred_set,
             image_sha256=image_hash, encoder_tag=self.encoder.tag, alpha=alpha,
             top1=cands[0] if cands else None, note=note,
+            ood_score=self.calibration.ood_score(dists) if self.calibration and self.calibration.ood else None,
+            ood_threshold=self.calibration.ood.get('threshold') if self.calibration else None,
+            rejection_reason=('ood' if rejected_ood else 'tie' if tied else
+                              'conformal' if self.calibration and not pred_set else
+                              'risk' if rejected_risk else 'operator_required' if
+                              status == STATUS_AMBIGUOUS and len(pred_set) == 1 and
+                              self.bank.entries[pred_set[0]].requires_operator else ''),
+            conformal_prediction_set=conformal_set,
+            decision_rule=self.calibration.decision_rule if self.calibration else 'conformal',
+            score_semantics='euclidean_distance',
         )
 
     def recognize(self, image_path: str | Path) -> RecognitionResult:

@@ -244,6 +244,28 @@ def build_provenance_scenarios(repo: ProvenanceRepository,
     add_event(lot9.lot_id)
     cases.append(ScenarioCase("imported_missing_customs", SCENARIOS[8][1], "assist",
                               sku_to_images[sku9][0], sku9, lot9.lot_id, 89_000))
+    # Same SKU, different lot: appearance cannot establish which lot was sold.
+    sku = S['happy']
+    lot_other = repo.upsert_lot(Lot(
+        lot_id='lot_same_sku_expired', sku_id=sku, supplier_id=sup_vn.supplier_id,
+        origin_country='VN', origin_region='Vùng khác', expiry_date=str(today - timedelta(days=1)),
+        production_date=str(today - timedelta(days=10)), received_date=str(today - timedelta(days=5)),
+        status=LotStatus.ACTIVE.value))
+    add_evidence(lot_other.lot_id, [EvidenceType.DELIVERY_NOTE.value, EvidenceType.SUPPLIER_DECLARATION.value])
+    add_event(lot_other.lot_id)
+    cases.append(ScenarioCase('same_sku_different_lot', 'Ảnh cùng SKU nhưng POS chọn lô đã hết hạn',
+                              'block', sku_to_images[sku][0], sku, lot_other.lot_id))
+    lot_cert = repo.upsert_lot(Lot(
+        lot_id='lot_expired_certificate', sku_id=sku, supplier_id=sup_vn.supplier_id,
+        origin_country='VN', expiry_date=str(today + timedelta(days=20)),
+        production_date=str(today - timedelta(days=2)), received_date=str(today), status=LotStatus.ACTIVE.value))
+    add_evidence(lot_cert.lot_id, [EvidenceType.DELIVERY_NOTE.value, EvidenceType.SUPPLIER_DECLARATION.value],
+                 valid_until=str(today - timedelta(days=1)))
+    add_event(lot_cert.lot_id)
+    cases.append(ScenarioCase('expired_certificate', 'Lô còn hạn nhưng chứng từ bắt buộc đã hết hiệu lực',
+                              'assist', sku_to_images[sku][0], sku, lot_cert.lot_id))
+    cases.append(ScenarioCase('lot_sku_conflict', 'Nhận đúng SKU nhưng POS chọn lô của SKU khác',
+                              'block', sku_to_images[sku][0], sku, lot7.lot_id))
     return cases
 
 
@@ -287,6 +309,9 @@ def evaluate_scenarios(service, cases: Sequence[ScenarioCase]) -> dict:
             "vision_status": (resp.recognition or {}).get("status", ""),
             "verification_status": (resp.verification or {}).get("status", ""),
             "messages": resp.messages, "notes": case.notes,
+            'decision_state': resp.decision_state,
+            'vision_only_accept': bool(resp.verification and resp.verification.get('status') == 'confirmed'),
+            'expected_auto_accept': expected in {'allow', 'allow_warning'},
         })
     n_vision = sum(1 for r in rows if r["divergence_source"] == "vision")
     n_policy = sum(1 for r in rows if r["divergence_source"] == "policy")
@@ -299,4 +324,9 @@ def evaluate_scenarios(service, cases: Sequence[ScenarioCase]) -> dict:
             (n_pass + n_vision) / len(rows) if rows else float("nan")
         ),
         "cases": rows,
+        'image_only_vs_policy': {
+            'n_unsafe_accept_image_only': sum(r['vision_only_accept'] and not r['expected_auto_accept'] for r in rows),
+            'n_unsafe_accept_full_policy': sum(r['actual'] in {'allow', 'allow_warning'} and not r['expected_auto_accept'] for r in rows),
+            'scope': 'Controlled simulated scenarios; count of unsafe automatic acceptance, not a field prevalence estimate.',
+        },
     }

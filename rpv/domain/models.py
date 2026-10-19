@@ -78,6 +78,13 @@ class DecisionOutcome(str, Enum):
     BLOCK = "block"                    # chặn giao dịch
 
 
+class DecisionState(str, Enum):
+    MATCH = 'match'
+    MISMATCH = 'mismatch'
+    ABSTAIN = 'abstain'
+    PROVENANCE_EXCEPTION = 'provenance_exception'
+
+
 class ReasonCode(str, Enum):
     """Mã lý do — hiển thị cho nhân viên VÀ dùng để thống kê trong đánh giá.
 
@@ -99,10 +106,12 @@ class ReasonCode(str, Enum):
     LOT_SOLD_OUT = "LOT_SOLD_OUT"
     LOT_STATUS_INVALID = "LOT_STATUS_INVALID"
     LOT_NEAR_EXPIRY = "LOT_NEAR_EXPIRY"
+    LOT_EXPIRY_UNKNOWN = 'LOT_EXPIRY_UNKNOWN'
     PROVENANCE_MISSING = "PROVENANCE_MISSING"
     PROVENANCE_INCOMPLETE = "PROVENANCE_INCOMPLETE"
     PROVENANCE_PENDING = "PROVENANCE_PENDING"
     PROVENANCE_REJECTED = "PROVENANCE_REJECTED"
+    PROVENANCE_EXPIRED = 'PROVENANCE_EXPIRED'
     ORIGIN_CLAIM_CONFLICT = "ORIGIN_CLAIM_CONFLICT"
     ORIGIN_UNKNOWN = "ORIGIN_UNKNOWN"
     TRACE_CHAIN_INCOMPLETE = "TRACE_CHAIN_INCOMPLETE"

@@ -30,6 +30,12 @@ class PixelEncoder(BaseEncoder):
 
 class TestManagedDataset(unittest.TestCase):
     def setUp(self):
+        from dataclasses import replace
+        from rpv import config
+        local_settings = replace(config.settings, calibration=replace(config.settings.calibration,
+            conformal_score='distance', confidence_method='energy', risk_calibration='known'))
+        settings_patch = patch.object(config,'settings',local_settings)
+        settings_patch.start(); self.addCleanup(settings_patch.stop)
         quiet = patch('rpv.data.managed.log')
         quiet.start()
         self.addCleanup(quiet.stop)
@@ -92,6 +98,19 @@ class TestManagedDataset(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'thay đổi'):
             index_dataset(self.root / 'prepared')
 
+    def test_declared_class_partition_must_match_records(self):
+        import json
+        from rpv.data.managed import fingerprint
+        self.prepared()
+        path = self.root / 'prepared' / 'manifest.json'
+        manifest = json.loads(path.read_text(encoding='utf-8'))
+        manifest.pop('fingerprint')
+        manifest['known_classes'].pop()
+        manifest['fingerprint'] = fingerprint(manifest)
+        path.write_text(json.dumps(manifest, ensure_ascii=False), encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'nhãn ngoài'):
+            index_dataset(self.root / 'prepared')
+
     def test_destination_never_overwritten(self):
         self.prepared()
         with self.assertRaisesRegex(ValueError, 'đã tồn tại'):
@@ -118,10 +137,13 @@ class TestManagedDataset(unittest.TestCase):
             result, bank, calibration = evaluate_system(encoder=encoder, splits=splits, verbose=False)
         self.assertEqual(set(bank.sku_ids), set(splits.train_classes))
         self.assertEqual(calibration.bank_fingerprint, bank.fingerprint())
-        self.assertEqual([r['k_shot'] for r in result.novel_evaluation['runs']], [1, 3, 5])
+        self.assertEqual([r['k_shot'] for r in result.novel_evaluation['runs']], [1, 2, 3, 5])
         known_rows = [p for p in result.predictions if p['truth'] != '__unknown__']
-        coverage = np.mean([p['truth'] in p['prediction_set'] for p in known_rows])
+        # Conformal coverage is measured before the independent OOD gate.
+        coverage = np.mean([p['truth'] in p['conformal_prediction_set'] for p in known_rows])
+        filtered_coverage = np.mean([p['truth'] in p['prediction_set'] for p in known_rows])
         self.assertEqual(result.selective['empirical_coverage'], coverage)
+        self.assertEqual(result.selective['empirical_coverage_after_ood'], filtered_coverage)
         self.assertEqual(result.open_set['n_unknown'], 72)
         self.assertIn('nearest_wrong_claim', result.verification)
         self.assertNotIn('accuracy_novel_classes_only', result.closed_set)

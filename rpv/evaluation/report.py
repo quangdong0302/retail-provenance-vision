@@ -50,6 +50,10 @@ def write_report(evaluation: Mapping, scenarios: Optional[Mapping] = None,
     cal = evaluation.get("calibration_on_calib_split", {})
     sp = evaluation.get("splits", {})
     cfg = evaluation.get("config", {})
+    figures = {}
+    if sel.get('risk_coverage_curve'):
+        from rpv.evaluation.plots import write_risk_coverage
+        figures = write_risk_coverage(sel['risk_coverage_curve'], sel.get('operating_point_known'), out_dir, stem)
 
     L: list[str] = []
     A = L.append
@@ -95,6 +99,7 @@ def write_report(evaluation: Mapping, scenarios: Optional[Mapping] = None,
     A(f"| Unknown reject rate | {_pct(os_.get('unknown_reject_rate'))} |")
     A(f"| False accept rate (hàng lạ bị nhận) | {_pct(os_.get('false_accept_rate'))} |")
     A(f"| AUROC | {_fmt(os_.get('auroc'))} |")
+    A(f"| Score OOD | {os_.get('score', 'distance')} |")
     fpr = os_.get("fpr_at_95tpr", {})
     A(f"| FPR @ 95% TPR | {_pct(fpr.get('fpr'))} |")
     A("")
@@ -104,14 +109,32 @@ def write_report(evaluation: Mapping, scenarios: Optional[Mapping] = None,
     A("|---|---|")
     A(f"| Tỉ lệ hệ thống chủ động không kết luận | {_pct(sel.get('abstention_rate'))} |")
     A(f"| Coverage chứa nhãn đúng | {_pct(sel.get('empirical_coverage'))} |")
+    A(f"| Coverage chứa nhãn đúng sau gate OOD | {_pct(sel.get('empirical_coverage_after_ood'))} |")
     A(f"| Kích thước tập trung bình | {_fmt(sel.get('mean_prediction_set_size'))} |")
-    A(f"| Accuracy khi có đúng một ứng viên | {_pct(sel.get('singleton_accuracy'))} |")
+    A(f"| Accuracy của câu trả lời tự động sau các gate | {_pct(sel.get('singleton_accuracy'))} |")
     A(f"| Hàng lạ bị từ chối đúng | {_pct(sel.get('unknown_items_correctly_rejected'))} |")
+    A(f"| Hàng lạ được trả lời tự động | {_pct(sel.get('unknown_auto_accept_rate'))} |")
+    A(f"| Hàng lạ chuyển nhân viên (OOD hoặc mơ hồ/risk) | {_pct(sel.get('unknown_handoff_rate'))} |")
     A(f"| Coverage tại rủi ro 1% | {_pct(sel.get('coverage_at_risk_1pct'))} |")
     A(f"| Coverage tại rủi ro 5% | {_pct(sel.get('coverage_at_risk_5pct'))} |")
     A(f"| Coverage tại rủi ro 10% | {_pct(sel.get('coverage_at_risk_10pct'))} |")
     A(f"| Phân bố trạng thái | `{sel.get('status_distribution')}` |")
     A("")
+    if figures:
+        A(f"![Risk–Coverage]({figures['risk_coverage_png'].name})")
+        A('')
+        A('Đường cong top-1 và điểm gate vận hành dùng hai quy tắc chọn lọc khác nhau; CSV lưu toàn bộ ngưỡng thực nghiệm.')
+        A('')
+    operating = sel.get('operating_point_known', {})
+    mixed = sel.get('operating_point_known_and_unknown', {})
+    if operating:
+        A('### Ngưỡng vận hành khóa trên known-calibration')
+        A('')
+        A(f"- Rủi ro mục tiêu: {_pct(operating.get('target_risk'))}; coverage known-test: {_pct(operating.get('coverage'))}; risk known-test: {_pct(operating.get('selective_risk'))}.")
+        A(f"- Trên known + unknown: coverage {_pct(mixed.get('coverage'))}; risk {_pct(mixed.get('selective_risk'))}.")
+        A(f"- Đạt mục tiêu trên known-test: {operating.get('target_met_on_test')}. Không có câu trả lời thì risk chưa xác định, không coi là đạt.")
+        A('- Coverage tại 1/5/10% trên đường cong chỉ là mô tả test; không chọn lại ngưỡng vận hành từ test. Ràng buộc calibration là thực nghiệm, chưa bảo đảm risk dân số.')
+        A('')
     A("## 5. Kiểm chứng lời khai (ảnh + SKU khai báo)")
     A("")
     A("| Metric | Giá trị |")
@@ -151,14 +174,32 @@ def write_report(evaluation: Mapping, scenarios: Optional[Mapping] = None,
         A(f"Đạt {scenarios.get('n_passed')}/{scenarios.get('n_cases')} kịch bản "
           f"({_pct(scenarios.get('pass_rate'))}).")
         A("")
-        A("| Kịch bản | Mong đợi | Thực tế | Kết quả | Mã lý do |")
-        A("|---|---|---|---|---|")
+        A("| Kịch bản | Mong đợi | Thực tế | Trạng thái quyết định | Kết quả | Mã lý do |")
+        A("|---|---|---|---|---|---|")
         for c in scenarios.get("cases", []):
             mark = "PASS" if c["passed"] else "FAIL"
-            A(f"| {c['scenario']} | {c['expected']} | {c['actual']} | {mark} | {', '.join(c['reasons'])} |")
+            A(f"| {c['scenario']} | {c['expected']} | {c['actual']} | {c.get('decision_state', '')} | {mark} | {', '.join(c['reasons'])} |")
         A("")
+        comparison = scenarios.get('image_only_vs_policy')
+        if comparison:
+            A(f"Chấp nhận tự động sai trong kịch bản kiểm soát: image-only {comparison['n_unsafe_accept_image_only']}; full-policy {comparison['n_unsafe_accept_full_policy']}.")
+            A('Đây là số ca mô phỏng, chưa phải tỷ lệ lỗi ngoài quầy.')
+            A('')
 
     err = evaluation.get("error_analysis", {})
+    robustness = evaluation.get('robustness_on_test_split', {})
+    if robustness:
+        A('## Nhiễu và hard negative trên test')
+        A('')
+        A(robustness['scope'])
+        A('')
+        A('| Điều kiện | Accuracy known | Coverage hỗn hợp | Risk hỗn hợp | Từ chối unknown | FAR hard negative |')
+        A('|---|---|---|---|---|---|')
+        for row in robustness['conditions']:
+            A(f"| {row['condition']} | {_pct(row['accuracy_known'])} | {_pct(row['coverage_known_and_unknown'])} | {_pct(row['selective_risk_known_and_unknown'])} | {_pct(row['unknown_reject_rate'])} | {_pct(row['hard_negative_far'])} |")
+        A('')
+        A(robustness['limitations'])
+        A('')
     if err:
         A("## 8. Phân tích lỗi")
         A("")
@@ -195,4 +236,4 @@ def write_report(evaluation: Mapping, scenarios: Optional[Mapping] = None,
 
     md_path = out_dir / f"{stem}.md"
     md_path.write_text("\n".join(L), encoding="utf-8")
-    return {"json": json_path, "markdown": md_path, 'predictions': predictions_path}
+    return {"json": json_path, "markdown": md_path, 'predictions': predictions_path, **figures}

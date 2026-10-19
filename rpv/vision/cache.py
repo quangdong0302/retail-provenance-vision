@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from rpv.util import log, stable_hash_hex
+from rpv.file_lock import file_lock
 
 
 def cache_key(image_sha256: str, use_tta: bool) -> str:
@@ -34,12 +35,17 @@ class EmbeddingCache:
         self.tag = tag
         self.dim = int(dim)
         self.max_entries = int(max_entries)
+        if self.dim < 1 or self.max_entries < 1:
+            raise ValueError('Cache dim và max_entries phải > 0.')
         slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", tag)[:60]
         self.path = Path(cache_dir) / f"{slug}-{stable_hash_hex(tag, dim, length=10)}.npz"
         self._lock = threading.RLock()
         self._data: dict[str, np.ndarray] = {}
         self._dirty = False
         self._loaded = False
+        self._pending: dict[str, np.ndarray] = {}
+        self.hits = 0
+        self.misses = 0
 
     # -- vòng đời ----------------------------------------------------------
     def _load(self) -> None:
@@ -53,21 +59,37 @@ class EmbeddingCache:
                 keys = z["keys"]
                 vecs = z["vecs"]
                 meta_dim = int(z["dim"][0]) if "dim" in z else self.dim
-            if meta_dim != self.dim or vecs.ndim != 2 or vecs.shape[1] != self.dim:
+            if (meta_dim != self.dim or vecs.ndim != 2 or vecs.shape[1] != self.dim
+                    or keys.ndim != 1 or len(keys) != len(vecs) or len(set(keys.tolist())) != len(keys)):
                 # Cache của cấu hình khác: bỏ, không cố "chữa".
                 self._data = {}
                 return
+            valid = np.isfinite(vecs).all(axis=1) & (np.linalg.norm(vecs, axis=1) >= 1e-8)
             self._data = {str(k): np.asarray(v, dtype=np.float32)
-                          for k, v in zip(keys.tolist(), vecs)}
+                          for k, v, ok in zip(keys.tolist(), vecs, valid) if ok}
+            if not valid.all():
+                log(f'[cache] bỏ {int((~valid).sum())} vector không hợp lệ; sẽ nhúng lại ảnh gốc.')
         except Exception:
             # Cache hỏng không bao giờ được làm chết đường chạy chính: nó chỉ là
             # tối ưu tốc độ, không phải nguồn dữ liệu.
             self._data = {}
 
     def flush(self) -> None:
-        with self._lock:
+        try:
+            self._flush()
+        except OSError as exc:
+            log(f'[cache] cannot persist {self.path}: {exc}; vectors remain in memory.')
+
+    def _flush(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock, file_lock(self.path.with_name(self.path.name + '.lock')):
             if not self._dirty or not self._data:
                 return
+            # Another notebook may have persisted different images meanwhile.
+            pending = dict(self._pending)
+            self._loaded = False
+            self._load()
+            self._data.update(pending)
             items = list(self._data.items())
             if len(items) > self.max_entries:       # giữ phần mới nhất
                 items = items[-self.max_entries:]
@@ -84,6 +106,7 @@ class EmbeddingCache:
                     np.savez(fh, keys=keys, vecs=vecs, dim=np.array([self.dim], dtype=np.int64))
                 os.replace(tmp, self.path)
                 self._dirty = False
+                self._pending.clear()
             except OSError as exc:
                 Path(tmp).unlink(missing_ok=True)
                 log(f"[cache] không ghi được {self.path}: {exc} (bỏ qua, chỉ mất tốc độ)")
@@ -93,15 +116,22 @@ class EmbeddingCache:
         with self._lock:
             self._load()
             v = self._data.get(key)
+            if v is None:
+                self.misses += 1
+            else:
+                self.hits += 1
             return None if v is None else v.copy()
 
     def put(self, key: str, vec: np.ndarray) -> None:
         vec = np.asarray(vec, dtype=np.float32)
         if vec.shape != (self.dim,):
             raise ValueError(f"Cache {self.tag}: kỳ vọng vector dim={self.dim}, nhận {vec.shape}.")
+        if not np.isfinite(vec).all() or np.linalg.norm(vec) < 1e-8:
+            raise ValueError('Không được cache vector không hữu hạn hoặc vector 0.')
         with self._lock:
             self._load()
-            self._data[key] = vec
+            self._data[key] = vec.copy()
+            self._pending[key] = vec.copy()
             self._dirty = True
 
     def __len__(self) -> int:
@@ -114,7 +144,10 @@ class EmbeddingCache:
             self._data = {}
             self._loaded = True
             self._dirty = False
+            self._pending.clear()
             self.path.unlink(missing_ok=True)
 
     def info(self) -> dict:
-        return {"tag": self.tag, "dim": self.dim, "n_entries": len(self), "path": str(self.path)}
+        return {"tag": self.tag, "dim": self.dim, "n_entries": len(self), "path": str(self.path),
+                "hits": self.hits, "misses": self.misses,
+                "disk_bytes": self.path.stat().st_size if self.path.exists() else 0}

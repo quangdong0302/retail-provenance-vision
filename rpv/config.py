@@ -8,6 +8,7 @@ số liệu chính của luận văn đo bằng DINOv2.
 from __future__ import annotations
 
 import os
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -39,9 +40,13 @@ def load_env_file(path: str | Path = ROOT / ".env", *, override: bool = False) -
     if not path.is_file():
         return 0
     loaded = 0
+    preceding_comment = ''
     for lineno, raw_line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
         line = raw_line.strip()
-        if not line or line.startswith("#"):
+        if line.startswith('#'):
+            preceding_comment = line
+            continue
+        if not line:
             continue
         if line.lower().startswith("export "):
             line = line[7:].lstrip()
@@ -57,6 +62,16 @@ def load_env_file(path: str | Path = ROOT / ".env", *, override: bool = False) -
         if override or key not in os.environ:
             os.environ[key] = value
             loaded += 1
+        elif ((not key.endswith(('_DIR', '_PATH', '_REPO', '_WEIGHTS', '_CKPT', '_OUT',
+                                 '_DB', '_BANK', '_CALIB', '_AUDIT', '_REPORTS'))
+               or (not value and os.environ[key].strip() == preceding_comment))
+              and os.environ[key] != value and _strip_inline_comment(os.environ[key].strip()) == value):
+            # Some launchers pre-load .env without removing inline comments.
+            # Repair only an inherited value matching this file after comment
+            # removal; keep genuine environment overrides and literal # paths.
+            os.environ[key] = value
+            loaded += 1
+        preceding_comment = ''
     return loaded
 
 
@@ -123,6 +138,24 @@ class VisionConfig:
     use_cache: bool = field(default_factory=lambda: _env("RPV_EMBED_CACHE", True))
     cache_max_entries: int = field(default_factory=lambda: _env("RPV_CACHE_MAX", 200_000))
     checkpoint: str = field(default_factory=lambda: _env("RPV_PROJECTION_CKPT", ""))
+    catalog_backend: str = field(default_factory=lambda: _env('RPV_CATALOG_BACKEND', 'prototype'))
+    prototype_color_weight: float = field(default_factory=lambda: _env('RPV_PROTOTYPE_COLOR_WEIGHT',0.0))
+
+    def __post_init__(self):
+        if not math.isfinite(self.prototype_color_weight) or self.prototype_color_weight < 0:
+            raise ValueError('RPV_PROTOTYPE_COLOR_WEIGHT must be finite and nonnegative.')
+        if self.catalog_backend != 'prototype':
+            raise ValueError('RPV_CATALOG_BACKEND must be prototype; restart an old kernel after changing .env.')
+        for name in ('batch_size', 'image_size', 'centroids_per_sku', 'cache_max_entries'):
+            value = getattr(self, name)
+            if type(value) is not int or value < 1:
+                raise ValueError(f'VisionConfig.{name} phải là số nguyên dương, nhận {value!r}.')
+        if type(self.top_k) is not int or self.top_k < 0:
+            raise ValueError('RPV_TOP_K phải là số nguyên >= 0.')
+        if not math.isfinite(self.crop_ratio) or not .5 <= self.crop_ratio <= 1:
+            raise ValueError('RPV_CROP_RATIO phải hữu hạn, trong [0.5, 1].')
+        if self.resize_mode not in {'pad', 'crop', 'stretch'}:
+            raise ValueError('RPV_RESIZE_MODE phải là pad, crop hoặc stretch.')
 
     def resolved_device(self) -> str:
         if self.device:
@@ -136,6 +169,13 @@ class VisionConfig:
 
 @dataclass(frozen=True)
 class CalibrationConfig:
+    decision_rule: str = field(default_factory=lambda: _env('RPV_DECISION_RULE', 'conformal'))
+    conformal_score: str = field(default_factory=lambda: _env('RPV_CONFORMAL_SCORE', 'distance'))
+    confidence_method: str = field(default_factory=lambda: _env('RPV_CONFIDENCE_METHOD', 'energy'))
+    risk_calibration: str = field(default_factory=lambda: _env('RPV_RISK_CALIBRATION', 'known'))
+    ood_method: str = field(default_factory=lambda: _env('RPV_OOD_METHOD', 'energy'))
+    energy_temperature: float = field(default_factory=lambda: _env('RPV_ENERGY_TEMPERATURE', 0.05))
+    target_selective_risk: float = field(default_factory=lambda: _env('RPV_TARGET_RISK', 0.01))
     # alpha = mức rủi ro mục tiêu của conformal prediction (1 - coverage).
     alpha: float = field(default_factory=lambda: _env("RPV_ALPHA", 0.10))
     # Ràng buộc nghiệp vụ khi hiệu chỉnh ngưỡng open-set.
@@ -146,6 +186,29 @@ class CalibrationConfig:
     class_split_seed: int = field(default_factory=lambda: _env("RPV_CLASS_SPLIT_SEED", 1))
     calib_test_seed: int = field(default_factory=lambda: _env("RPV_CALIB_TEST_SEED", 123))
     k_shot: int = field(default_factory=lambda: _env("RPV_K_SHOT", 3))
+
+    def __post_init__(self):
+        if self.decision_rule not in {'conformal', 'prototype_selective'}:
+            raise ValueError('RPV_DECISION_RULE must be conformal or prototype_selective.')
+        if self.conformal_score not in {'distance', 'relative'}:
+            raise ValueError('RPV_CONFORMAL_SCORE must be distance or relative.')
+        if self.confidence_method not in {'energy', 'nearest_ratio'}:
+            raise ValueError('Unsupported confidence method.')
+        if self.risk_calibration not in {'known', 'joint_extra', 'reserved_extra', 'six_extra_cal'}:
+            raise ValueError('Unsupported risk calibration protocol.')
+        if not math.isfinite(self.alpha) or not 0 < self.alpha < 1:
+            raise ValueError('RPV_ALPHA phải hữu hạn, trong (0, 1).')
+        if not math.isfinite(self.target_known_recall) or not 0 < self.target_known_recall <= 1:
+            raise ValueError('RPV_TARGET_KNOWN_RECALL phải hữu hạn, trong (0, 1].')
+        if not math.isfinite(self.target_selective_risk) or not 0 <= self.target_selective_risk < 1:
+            raise ValueError('RPV_TARGET_RISK phải hữu hạn, trong [0, 1).')
+        if not math.isfinite(self.energy_temperature) or self.energy_temperature <= 0:
+            raise ValueError('RPV_ENERGY_TEMPERATURE phải hữu hạn và > 0.')
+        for name in ('k_shot', 'min_calib_per_class'):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
+                raise ValueError(f'CalibrationConfig.{name} phải là số nguyên dương.')
+        if self.ood_method not in {'energy', 'distance'}:
+            raise ValueError('RPV_OOD_METHOD phải là energy hoặc distance.')
 
 
 @dataclass(frozen=True)
@@ -168,6 +231,14 @@ class PolicyConfig:
             "default": ("delivery_note",),
         }
     )
+
+    def __post_init__(self):
+        if not math.isfinite(self.high_value_threshold) or self.high_value_threshold < 0:
+            raise ValueError('RPV_HIGH_VALUE phải hữu hạn và >= 0.')
+        if type(self.expiry_warning_days) is not int or self.expiry_warning_days < 0:
+            raise ValueError('RPV_EXPIRY_WARN_DAYS phải là số nguyên >= 0.')
+        if not math.isfinite(self.verify_margin_assist) or self.verify_margin_assist < 0:
+            raise ValueError('RPV_VERIFY_MARGIN_ASSIST phải hữu hạn và >= 0.')
 
 
 @dataclass(frozen=True)
@@ -197,6 +268,7 @@ class Settings:
     # Adapter ra Internet bị TẮT mặc định: luận văn phải tái lập được offline,
     # và dữ liệu cộng đồng không thay thế hồ sơ lô (xem docs/ARCHITECTURE.md).
     enable_external_adapters: bool = field(default_factory=lambda: _env("RPV_EXTERNAL_ADAPTERS", False))
+    training_protocol: str = field(default_factory=lambda: _env('RPV_TRAINING_PROTOCOL', 'episodic'))
 
 
 settings = Settings()

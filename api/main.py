@@ -59,7 +59,8 @@ async def lifespan(app: FastAPI):
         _state["bank"] = bank
         _state["calibration"] = calibration
         _state["service"] = CheckoutService(encoder, bank, repo, calibration,
-                                            audit=AuditLog(app_config.settings.paths.audit_path), bank_path=app_config.settings.paths.bank_path)
+                                            audit=AuditLog(app_config.settings.paths.audit_path), bank_path=app_config.settings.paths.bank_path,
+                                            calibration_path=app_config.settings.paths.calib_path)
         _state['calibration'] = _state['service'].calibration
     except Exception as exc:                     # noqa: BLE001 - phải báo, không được chết
         _state["startup_error"] = f"{type(exc).__name__}: {exc}"
@@ -319,7 +320,11 @@ def status(repo: ProvenanceRepository = Depends(get_repo)) -> dict:
         "version": __version__,
         "vision": bank.summary() if bank is not None else {"error": _state.get("startup_error")},
         "calibration": None if calib is None else {
-            "alpha": calib.alpha, "global_threshold": calib.global_threshold,
+            "alpha": calib.alpha if calib.decision_rule == 'conformal' else None,
+            'decision_rule': calib.decision_rule,
+            'risk_control': calib.risk_control,
+            'ood': calib.ood,
+            "global_threshold": calib.global_threshold,
             "n_per_class_thresholds": len(calib.per_class_threshold),
             "warnings": calib.warnings,
         },

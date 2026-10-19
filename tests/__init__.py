@@ -17,6 +17,8 @@ _overrides = {
     'RPV_HEAD_OUT': str(_root / 'head.pt'),
     'RPV_PROJECTION_CKPT': '',
     'RPV_ENCODER': 'classical',
+    'RPV_DECISION_RULE': 'conformal',
+    'RPV_PROTOTYPE_COLOR_WEIGHT': '0',
     'RPV_EXTERNAL_ADAPTERS': '0',
 }
 _previous = {key: os.environ.get(key) for key in _overrides}

@@ -129,6 +129,7 @@ class PrototypeEntry:
             raise BankIncompatibleError('Prototype chứa vector không hợp lệ.') from exc
         if (data['centroids'].ndim != 2 or not data['centroids'].size
                 or not np.isfinite(data['centroids']).all()
+                or np.any(np.linalg.norm(data['centroids'], axis=1) < 1e-8)
                 or not isinstance(data['sku_id'], str) or not data['sku_id']
                 or type(data['n_shots']) is not int or data['n_shots'] < 1
                 or type(data.get('requires_operator', False)) is not bool):
@@ -144,12 +145,14 @@ class PrototypeBank:
     """Bộ nhớ danh mục thị giác. Thêm SKU = trung bình vài vector, O(vài ảnh)."""
 
     # v3 persists an operator-only gate; old readers must not silently drop it.
-    FORMAT_VERSION = 3
+    FORMAT_VERSION = 4
 
     def __init__(self, encoder: BaseEncoder, centroids_per_sku: int | None = None) -> None:
         from rpv.config import settings
         self.encoder = encoder
-        self.centroids_per_sku = centroids_per_sku or settings.vision.centroids_per_sku
+        self.centroids_per_sku = settings.vision.centroids_per_sku if centroids_per_sku is None else centroids_per_sku
+        if type(self.centroids_per_sku) is not int or self.centroids_per_sku < 1:
+            raise ValueError('centroids_per_sku phải là số nguyên dương.')
         self.entries: dict[str, PrototypeEntry] = {}
         self._lock = threading.RLock()
 
@@ -181,6 +184,8 @@ class PrototypeBank:
             raise RuntimeError(f"SKU {sku_id}: tất cả ảnh đều lỗi, không đăng ký được.")
         V = l2_normalize(np.asarray(vecs, dtype=np.float32))
         centroids = kmeans(V, self.centroids_per_sku)
+        if not np.isfinite(centroids).all() or np.any(np.linalg.norm(centroids, axis=1) < 1e-8):
+            raise ValueError('Không thể đăng ký prototype có tâm không hợp lệ; kiểm tra ảnh/nhãn.')
         spread = float(np.mean(np.min(np.linalg.norm(V[:, None, :] - centroids[None], axis=2), axis=1)))
         with self._lock:
             existing = self.entries.get(sku_id)
@@ -203,9 +208,24 @@ class PrototypeBank:
     def fingerprint(self) -> str:
         """Bind thresholds to exact prototype geometry, independent of timestamps."""
         with self._lock:
+            # Check geometry cheaply on every request; serialize float lists
+            # only after a change. Preserve the existing artifact fingerprint.
+            geometry = hashlib.sha256(self.encoder.tag.encode())
+            for sku in self.sku_ids:
+                key = sku.encode('utf-8')
+                centers = self.entries[sku].centroids
+                geometry.update(len(key).to_bytes(4, 'big'))
+                geometry.update(key)
+                geometry.update(str((centers.shape, centers.dtype)).encode())
+                geometry.update(centers.tobytes())
+            stamp = geometry.digest()
+            if getattr(self, '_fingerprint_stamp', None) == stamp:
+                return self._fingerprint_value
             payload = {'encoder': self.encoder.tag, 'centroids': {
                 s: self.entries[s].centroids.tolist() for s in self.sku_ids}}
-        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+            value = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+            self._fingerprint_stamp, self._fingerprint_value = stamp, value
+            return value
 
     # -- đọc ---------------------------------------------------------------
     @property
@@ -241,12 +261,16 @@ class PrototypeBank:
         embeddings = np.asarray(embeddings, dtype=np.float32)
         if embeddings.ndim == 1:
             embeddings = embeddings.reshape(1, -1)
+        if embeddings.ndim != 2:
+            raise ValueError('Embedding để nhận diện phải là ma trận 2 chiều.')
         with self._lock:
             M, owners = self._matrix()
             skus = self.sku_ids
         if M.shape[0] == 0 or embeddings.shape[0] == 0:
             return np.zeros((embeddings.shape[0], len(skus) if M.shape[0] else 0),
                             dtype=np.float32), (skus if M.shape[0] else [])
+        if not np.isfinite(embeddings).all() or np.any(np.linalg.norm(embeddings, axis=1) < 1e-8):
+            raise ValueError('Embedding để nhận diện phải hữu hạn, không chứa vector 0.')
         if embeddings.shape[1] != M.shape[1]:
             raise ValueError(
                 f"Embedding có dim={embeddings.shape[1]} nhưng prototype trong bank có "
@@ -299,6 +323,8 @@ class PrototypeBank:
         if (not isinstance(payload, dict) or not isinstance(payload.get('_meta'), dict)
                 or not isinstance(payload.get('entries'), dict)):
             raise BankIncompatibleError('Bank phải chứa _meta và entries dạng object JSON.')
+        if 'linear_classifier' in payload:
+            raise BankIncompatibleError('Danh mục chứa classifier cũ; cần dựng lại prototype và calibration.')
         meta = payload.get("_meta", {})
         version = meta.get("format_version", 0)
         if type(version) is not int or version < 2:
@@ -337,9 +363,12 @@ class PrototypeBank:
             self.centroids_per_sku = centroids_per_sku
         return self
 
+
     def summary(self) -> dict:
         return {
             "n_skus": len(self.entries),
+            'catalog_backend': 'prototype',
+            'score_semantics': 'euclidean_distance',
             "encoder_tag": self.encoder.tag,
             "dim": int(self.encoder.dim),
             "centroids_per_sku": self.centroids_per_sku,

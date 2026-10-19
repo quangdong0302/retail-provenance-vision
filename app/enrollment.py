@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import gradio as gr
 
+from app.presentation import section
 from rpv.util import json_dumps
 
 
@@ -100,52 +101,59 @@ def build_enrollment_tab(get_service):
         except (ValueError, OSError, RuntimeError) as exc:
             raise gr.Error(str(exc)) from exc
 
-    with gr.Tab('Đăng ký có kiểm tra'):
-        gr.Markdown('## Đăng ký mặt hàng và kiểm tra nhầm lẫn\n'
-                    'Tạo hồ sơ → thêm ảnh mẫu → kiểm tra với ảnh chụp riêng → bổ sung ảnh → đăng ký. '
-                    'Các vai trò phải dùng nhóm khác nhau. Cùng một vật thể phải giữ cùng mã nhóm, '
-                    'kể cả khi đổi góc hoặc ngày chụp.')
-        with gr.Row():
-            sku = gr.Textbox(label='Mã mặt hàng', placeholder='tao_moi')
-            label = gr.Textbox(label='Tên hiển thị', placeholder='Táo mới')
-            create_btn = gr.Button('Tạo hồ sơ')
-        with gr.Row():
-            existing = gr.Dropdown(choices=choices(), label='Mở lại hồ sơ đã lưu')
-            refresh = gr.Button('Tải danh sách')
-            load_btn = gr.Button('Mở hồ sơ')
-        session = gr.Textbox(label='Mã hồ sơ đang mở', interactive=False)
-        with gr.Row():
-            role = gr.Dropdown(choices=[('Ảnh mẫu để đăng ký', 'support'),
-                                       ('Ảnh kiểm tra đúng mặt hàng', 'validation'),
-                                       ('Ảnh kiểm tra mặt hàng khác', 'negative')], value='support', label='Vai trò ảnh')
-            group = gr.Textbox(label='Mã vật thể/phiên chụp', placeholder='qua_01_phien_sang')
-        negative_sku = gr.Textbox(label='SKU đúng của ảnh hàng khác (chỉ điền cho vai trò hàng khác)',
-                                  placeholder='Mã SKU đã có trong danh mục')
-        gr.Markdown('Bắt đầu với 3–5 ảnh mẫu từ ít nhất hai nhóm. Để kiểm tra đầy đủ: ít nhất '
-                    '10 ảnh đúng mặt hàng và 10 ảnh hàng khác, mỗi vai trò từ ít nhất hai nhóm riêng. '
-                    'Đây là ngưỡng kiểm tra thử nghiệm. Không dùng lại ảnh mẫu làm ảnh kiểm tra. '
-                    'Ảnh hàng khác nên gồm các mặt hàng dễ nhầm trong danh mục.')
-        files = gr.File(label='Ảnh của nhóm này', file_count='multiple', file_types=['image'])
-        add_btn = gr.Button('Kiểm tra chất lượng và thêm ảnh')
-        gallery = gr.Gallery(label='Ảnh mẫu đã lưu', columns=4)
-        samples = gr.Dataframe(headers=['Mã ảnh', 'Tên ảnh', 'Vai trò', 'Nhóm'], interactive=False)
-        with gr.Row():
-            remove_id = gr.Dropdown(label='Ảnh mẫu cần bỏ')
-            remove_btn = gr.Button('Bỏ ảnh mẫu')
-        assess_btn = gr.Button('Kiểm tra nhầm lẫn', variant='primary')
-        output = gr.Markdown()
-        references = gr.Gallery(label='Ảnh mẫu của các mặt hàng dễ nhầm (nếu còn ảnh tham chiếu)', columns=3)
-        with gr.Accordion('Lịch sử kiểm tra', open=False):
-            history = gr.Code(language='json')
-        gr.Markdown('Đăng ký sẽ lưu bản sao danh mục cũ và vô hiệu hóa ngưỡng cũ. '
-                    'Toàn bộ danh mục sẽ cần nhân viên xác nhận cho tới khi có hiệu chỉnh phù hợp. '
-                    'Mặt hàng mới giữ chế độ nhân viên xác nhận. Hồ sơ lô và chứng từ được quản lý riêng.')
-        publish_btn = gr.Button('Đăng ký vào danh mục — cần nhân viên xác nhận')
+    with gr.Tab('Đăng ký mặt hàng', id='enrollment'):
+        gr.HTML(section('Đăng ký có kiểm tra nhầm lẫn',
+                        'Tạo hồ sơ → thêm ảnh → kiểm tra với ảnh riêng → bổ sung mẫu → đăng ký vào danh mục.'))
+        with gr.Row(equal_height=False):
+            with gr.Column(scale=5, min_width=330, elem_classes='rpv-card'):
+                gr.HTML(section('Hồ sơ mặt hàng', 'Dùng một mã SKU nhất quán cho ảnh và hồ sơ lô.', '01'))
+                with gr.Row():
+                    sku = gr.Textbox(label='Mã mặt hàng', placeholder='tao_moi')
+                    label = gr.Textbox(label='Tên hiển thị', placeholder='Táo mới')
+                create_btn = gr.Button('Tạo hồ sơ mới')
+                with gr.Accordion('Mở hồ sơ đã lưu', open=False):
+                    existing = gr.Dropdown(choices=choices(), label='Hồ sơ đăng ký')
+                    with gr.Row():
+                        refresh = gr.Button('Cập nhật danh sách')
+                        load_btn = gr.Button('Mở hồ sơ')
+                session = gr.Textbox(label='Mã hồ sơ đang mở', interactive=False)
+                gr.HTML(section('Bổ sung ảnh', 'Mỗi vật thể dùng cùng mã nhóm kể cả khi đổi góc hoặc ngày chụp.', '02'))
+                role = gr.Dropdown(choices=[('Ảnh mẫu để đăng ký', 'support'),
+                                           ('Ảnh kiểm tra đúng mặt hàng', 'validation'),
+                                           ('Ảnh kiểm tra mặt hàng khác', 'negative')], value='support', label='Vai trò ảnh')
+                group = gr.Textbox(label='Mã vật thể / phiên chụp', placeholder='qua_01_phien_sang')
+                negative_sku = gr.Textbox(label='SKU đúng của ảnh hàng khác', visible=False,
+                                         placeholder='Mã đã có trong danh mục')
+                files = gr.File(label='Ảnh của nhóm này', file_count='multiple', file_types=['image'])
+                add_btn = gr.Button('Kiểm tra chất lượng & thêm ảnh')
+                with gr.Accordion('Ảnh cần chuẩn bị', open=False):
+                    gr.Markdown('Bắt đầu với **3–5 ảnh mẫu từ ít nhất hai nhóm**. Kiểm tra đầy đủ cần '
+                                '**10 ảnh đúng mặt hàng và 10 ảnh hàng khác**, mỗi vai trò từ ít nhất hai nhóm riêng. '
+                                'Đây là ngưỡng kiểm tra thử nghiệm. Không dùng lại ảnh mẫu làm ảnh kiểm tra; '
+                                'ưu tiên hàng khác dễ nhầm trong danh mục.')
+            with gr.Column(scale=6, min_width=330, elem_classes='rpv-card'):
+                gr.HTML(section('Kiểm tra & cải thiện', 'Xem mẫu đã lưu, kết quả nhầm lẫn và hướng dẫn bổ sung.', '03'))
+                gallery = gr.Gallery(label='Ảnh mẫu đã lưu', columns=3, height=210, interactive=False)
+                assess_btn = gr.Button('Kiểm tra nhầm lẫn →', variant='primary', elem_classes='rpv-primary')
+                output = gr.Markdown('Tạo hoặc mở hồ sơ để bắt đầu. Kết quả kiểm tra sẽ xuất hiện tại đây.')
+                references = gr.Gallery(label='Ảnh tham chiếu của mặt hàng dễ nhầm', columns=3, height=200,
+                                        interactive=False)
+                with gr.Accordion('Quản lý ảnh mẫu', open=False):
+                    samples = gr.Dataframe(headers=['Mã ảnh', 'Tên ảnh', 'Vai trò', 'Nhóm'], interactive=False)
+                    remove_id = gr.Dropdown(label='Ảnh mẫu cần bỏ')
+                    remove_btn = gr.Button('Bỏ ảnh mẫu')
+                with gr.Accordion('Lịch sử kiểm tra · JSON', open=False):
+                    history = gr.Code(language='json')
+                gr.Markdown('Đăng ký sẽ lưu bản sao danh mục cũ và vô hiệu hóa ngưỡng cũ. '
+                            'Danh mục cần nhân viên xác nhận tới khi có hiệu chỉnh phù hợp. '
+                            'Nhập hồ sơ lô ở tab **Nhập hồ sơ lô** sau khi đăng ký.')
+                publish_btn = gr.Button('Đăng ký vào danh mục', elem_classes='rpv-secondary')
         outputs = [output, samples, remove_id, gallery, references, history]
         create_btn.click(create, [sku, label], [session, existing, *outputs])
         refresh.click(lambda: gr.update(choices=choices()), None, existing)
         load_btn.click(load, existing, [session, *outputs])
         add_btn.click(add, [session, role, group, negative_sku, files], outputs)
+        role.change(lambda value: gr.update(visible=value == 'negative'), role, negative_sku, queue=False)
         remove_btn.click(remove, [session, remove_id], outputs)
         assess_btn.click(assess, session, outputs)
-        publish_btn.click(publish, session, outputs)
+        return publish_btn.click(publish, session, outputs)

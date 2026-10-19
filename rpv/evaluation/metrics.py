@@ -42,12 +42,14 @@ def per_class_recall(y_true: Sequence[str], y_pred: Sequence[str]) -> dict[str, 
     return {c: hit[c] / total[c] for c in sorted(total)}
 
 
-def macro_f1(y_true: Sequence[str], y_pred: Sequence[str]) -> float:
+def macro_f1(y_true: Sequence[str], y_pred: Sequence[str], labels: Sequence[str] | None = None) -> float:
     """Macro-F1 trên hợp của nhãn thật và nhãn dự đoán (gồm cả nhãn 'unknown').
     Macro chứ không micro: danh mục bán lẻ luôn lệch số lượng ảnh giữa các SKU,
     micro-F1 sẽ bị các SKU nhiều ảnh chi phối."""
     _check_lengths(y_true, y_pred)
-    labels = sorted(set(y_true) | set(y_pred))
+    labels = sorted(set(y_true) | set(y_pred)) if labels is None else list(labels)
+    if len(labels) != len(set(labels)):
+        raise ValueError('Macro-F1 label list must contain distinct labels.')
     f1s = []
     for c in labels:
         tp = sum(1 for t, p in zip(y_true, y_pred) if t == c and p == c)

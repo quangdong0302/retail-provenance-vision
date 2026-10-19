@@ -77,8 +77,13 @@ def _load_stack(strict_calibration: bool = True):
             st.paths.calib_path, encoder.tag if strict_calibration else None)
     repo = ProvenanceRepository(st.paths.db_path)
     repo.init_schema()
-    service = CheckoutService(encoder, bank, repo, calibration, audit=AuditLog(st.paths.audit_path),
-                              bank_path=st.paths.bank_path)
+    try:
+        service = CheckoutService(encoder, bank, repo, calibration, audit=AuditLog(st.paths.audit_path),
+                                  bank_path=st.paths.bank_path, calibration_path=st.paths.calib_path)
+        service.refresh_catalog()
+    except BaseException:
+        repo.close()
+        raise
     return encoder, bank, service.calibration, repo, service
 
 
@@ -87,7 +92,7 @@ def _build_splits(k_shot: int | None = None):
 
     st = _settings()
     cfg = st.calibration
-    return build_splits(index_dataset(st.paths.data_dir), k_shot=k_shot or cfg.k_shot,
+    return build_splits(index_dataset(st.paths.data_dir), k_shot=cfg.k_shot if k_shot is None else k_shot,
                         class_seed=cfg.class_split_seed,
                         calib_test_seed=cfg.calib_test_seed)
 
@@ -144,7 +149,7 @@ def cmd_warm_cache(args) -> int:
         log(f"[warm] {cname}: {len(index[cname])} ảnh ({done}/{total})")
     cache = encoder._cache()
     print(_json({"encoder": encoder.describe(), "n_images": total,
-                 "cache": cache.info() if cache else "đang tắt (RPV_EMBED_CACHE=0)"}))
+                 "cache": cache.info() if cache is not None else "đang tắt (RPV_EMBED_CACHE=0)"}))
     return 0
 
 
@@ -161,7 +166,7 @@ def cmd_train_head(args) -> int:
 
     st = _settings()
     st.paths.ensure()
-    encoder = load_encoder()
+    encoder = load_encoder(checkpoint=False) if st.vision.encoder == 'dinov2' else load_encoder()
     if not isinstance(encoder, DinoV2Encoder):
         print("train-head chỉ có nghĩa với encoder dinov2 (backbone frozen + head học được). "
               f"Encoder hiện tại: {encoder.tag}. Đặt RPV_ENCODER=dinov2 hoặc --encoder dinov2.",
@@ -173,6 +178,23 @@ def cmd_train_head(args) -> int:
 
     splits = _build_splits(args.k_shot)
     log(f"[train-head] splits={splits.summary()}")
+
+    if st.training_protocol == 'catalog_grouped':
+        from rpv.vision.catalog_training import train_catalog_head
+        from rpv.data.managed import split_manifest
+        if (args.k_shot or st.calibration.k_shot) != 2:
+            raise ValueError('catalog_grouped is the selected 2-shot protocol; use episodic for other k.')
+        out_path = Path(args.out or st.paths.head_path)
+        res = train_catalog_head(encoder,splits,st.paths.data_dir,out_path,
+              epochs=args.epochs or 15,episodes_per_epoch=args.episodes or 250,
+              lr=args.lr or .0005,seed=args.seed,out_dim=args.out_dim,n_way=args.n_way or 17,q_query=args.q_query,
+              init_head=args.init_head)
+        out_path.with_suffix('.training.json').write_text(_json(res),encoding='utf-8')
+        out_path.with_suffix('.splits.json').write_text(_json(split_manifest(splits)),encoding='utf-8')
+        print(_json(res if not args.quiet else {k:v for k,v in res.items() if k!='history'}))
+        return 0
+    if st.training_protocol != 'episodic':
+        raise ValueError('RPV_TRAINING_PROTOCOL must be episodic or catalog_grouped.')
 
     feats: dict[str, np.ndarray] = {}
     for cname, paths in sorted(splits.train.items()):
@@ -189,9 +211,10 @@ def cmd_train_head(args) -> int:
     validation = {c: encoder.backbone_features(paths) for c, paths in splits.validation.items()}
     protocol = split_manifest(splits)
     res = train_projection_head(
-        feats, out_dim=args.out_dim, n_way=args.n_way, k_shot=args.k_shot or st.calibration.k_shot,
-        q_query=args.q_query, episodes_per_epoch=args.episodes, epochs=args.epochs,
-        lr=args.lr, validation_features=validation, backbone_tag=encoder.backbone_tag,
+        feats, out_dim=args.out_dim or encoder.backbone_dim, n_way=args.n_way or 5,
+        k_shot=st.calibration.k_shot if args.k_shot is None else args.k_shot,
+        q_query=args.q_query, episodes_per_epoch=args.episodes or 300, epochs=args.epochs or 20,
+        lr=args.lr or .001, validation_features=validation, backbone_tag=encoder.backbone_tag,
         dataset_fingerprint=splits.dataset_fingerprint, split_fingerprint=protocol['fingerprint'],
         seed=args.seed, device=encoder.device, save_path=out_path,
     )
@@ -213,6 +236,18 @@ def cmd_calibrate(args) -> int:
     encoder = load_encoder()
     splits = _build_splits(args.k_shot)
     bank, calib = fit_catalog(encoder, splits, args.alpha)
+    if st.paths.bank_path.is_file() and not getattr(args, 'replace_catalog', False):
+        import json
+        previous = json.loads(st.paths.bank_path.read_text(encoding='utf-8'))
+        previous_entries = previous.get('entries', {})
+        removed = set(previous_entries) - set(bank.entries)
+        replaced_support = [sku for sku in set(previous_entries) & set(bank.entries)
+                            if set(previous_entries[sku].get('image_hashes', []))
+                            != set(bank.entries[sku].image_hashes)]
+        if removed or replaced_support:
+            raise ValueError('Calibrate dựng lại catalog từ dataset và sẽ bỏ SKU/ảnh support đăng ký ngoài dataset. '
+                             'Giữ bank hiện tại hoặc dùng --replace-catalog khi chủ ý reset catalog. '
+                             f'SKU bị bỏ: {sorted(removed)}; support bị thay: {sorted(replaced_support)}')
     bank.save(st.paths.bank_path)
     calib.save(st.paths.calib_path)
     print(_json({
@@ -262,9 +297,15 @@ def cmd_evaluate(args) -> int:
     run_dir = st.paths.reports_dir / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '_' + uuid.uuid4().hex[:8])
     run_dir.mkdir(parents=True)
     (run_dir / 'splits.json').write_text(_json(split_manifest(splits)), encoding='utf-8')
+    catalog = None
+    if getattr(args, 'use_catalog', False):
+        from rpv.vision.calibration import CalibrationModel
+        from rpv.vision.prototypes import PrototypeBank
+        catalog = (PrototypeBank(encoder).load(st.paths.bank_path),
+                   CalibrationModel.load(st.paths.calib_path, encoder.tag))
     out, bank, calib = evaluate_system(encoder=encoder, splits=splits, k_shot=args.k_shot,
                                        alpha=args.alpha, save_bank_to=run_dir / 'prototypes.json',
-                                       save_calibration_to=run_dir / 'calibration.json')
+                                        save_calibration_to=run_dir / 'calibration.json', catalog=catalog)
     scen, decision_stats = None, {}
     if args.scenarios:
         with ProvenanceRepository(run_dir / 'scenarios.db') as repo:
@@ -273,7 +314,12 @@ def cmd_evaluate(args) -> int:
             service = CheckoutService(encoder, bank, repo, calib, audit=AuditLog(run_dir / 'audit.jsonl'))
             scen = evaluate_scenarios(service, cases)
             decision_stats = repo.decision_breakdown()
-    paths = write_report(out.to_json(), scen, out_dir=run_dir,
+    evaluation = out.to_json()
+    if args.robustness or args.hard_pairs:
+        from rpv.evaluation.robustness import evaluate_robustness
+        evaluation['robustness_on_test_split'] = evaluate_robustness(
+            encoder, bank, calib, splits, args.stress_max_per_class, args.hard_pairs)
+    paths = write_report(evaluation, scen, out_dir=run_dir,
                          stem=f"evaluation_{encoder.tag}", extra={"decision_breakdown": decision_stats})
     print(_json({
         "encoder": out.config.get("encoder"),
@@ -287,6 +333,21 @@ def cmd_evaluate(args) -> int:
         "warnings": out.warnings,
         "reports": {k: str(v) for k, v in paths.items()},
     }))
+    return 0
+
+
+def cmd_benchmark(args) -> int:
+    from rpv.evaluation.performance import benchmark_checkout
+    _, _, _, repo, service = _load_stack()
+    try:
+        result = benchmark_checkout(service, args.images, args.repeats, args.warmup, args.sku, args.lot)
+        output = Path(args.out)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(_json(result), encoding='utf-8')
+        print(_json({'report': str(output), 'hardware': result['hardware'],
+                     'modes': {name: mode['summary'] for name, mode in result['modes'].items()}}))
+    finally:
+        repo.close()
     return 0
 
 
@@ -380,7 +441,7 @@ def cmd_cache_info(args) -> int:
     encoder = load_encoder()
     cache = encoder._cache()
     print(_json({"encoder": encoder.describe(), "cache_dir": str(st.paths.cache_dir),
-                 "cache": cache.info() if cache else "đang tắt (RPV_EMBED_CACHE=0)"}))
+                 "cache": cache.info() if cache is not None else "đang tắt (RPV_EMBED_CACHE=0)"}))
     return 0
 
 
@@ -400,6 +461,8 @@ def cmd_status(args) -> int:
     from rpv.provenance.repository import ProvenanceRepository
     from rpv.vision.encoders import load_encoder
     from rpv.vision.prototypes import PrototypeBank
+    from rpv.vision.calibration import CalibrationModel
+    from rpv.vision.recognizer import Recognizer
 
     st = _settings()
     st.paths.ensure()
@@ -426,17 +489,30 @@ def cmd_status(args) -> int:
             db_info.update(repo.stats())
             db_info["decisions_by_outcome"] = repo.decision_breakdown()
     cache = encoder._cache()
+    calibration_info = {'exists': st.paths.calib_path.is_file()}
+    if calibration_info['exists']:
+        try:
+            calibration = CalibrationModel.load(st.paths.calib_path, encoder.tag)
+            if not calibration.bank_fingerprint:
+                raise ValueError('Calibration chưa gắn fingerprint của bank; cần calibrate lại.')
+            Recognizer(encoder, bank, calibration)
+            calibration_info.update(alpha=calibration.alpha, bank_fingerprint=calibration.bank_fingerprint,
+                                    ood=calibration.ood, risk_control=calibration.risk_control,
+                                    warnings=calibration.warnings)
+        except (OSError, ValueError, RuntimeError) as exc:
+            calibration_info['error'] = str(exc)
     print(_json({
         "version": __import__("rpv").__version__,
         "encoder": enc_info,
-        "embedding_cache": cache.info() if cache else "đang tắt (RPV_EMBED_CACHE=0)",
+        "embedding_cache": cache.info() if cache is not None else "đang tắt (RPV_EMBED_CACHE=0)",
         "prototype_bank": bank_info,
         "calibration_exists": Path(st.paths.calib_path).exists(),
+        "calibration": calibration_info,
         "database": db_info,
         "audit": AuditLog(st.paths.audit_path).verify(),
         "external_adapters_enabled": st.enable_external_adapters,
     }))
-    return 0
+    return 1 if bank_info.get('error') or calibration_info.get('error') else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -474,27 +550,34 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("train-head", parents=[common], help="fine-tune ProjectionHead (episodic)")
     s.add_argument("--out", default=None, help="file .pt đích (mặc định RPV_HEAD_OUT: var/thesis/projection_head.pt)")
-    s.add_argument("--out-dim", type=int, default=384)
-    s.add_argument("--n-way", type=int, default=5)
+    s.add_argument("--out-dim", type=int, default=None, help='default: backbone feature dimension')
+    s.add_argument("--n-way", type=int, default=None, help='default: 17 catalog_grouped, 5 episodic')
     s.add_argument("--k-shot", type=int, default=None)
     s.add_argument("--q-query", type=int, default=8)
-    s.add_argument("--episodes", type=int, default=300, help="số episode mỗi epoch")
-    s.add_argument("--epochs", type=int, default=20)
-    s.add_argument("--lr", type=float, default=1e-3)
+    s.add_argument("--episodes", type=int, default=None, help="số episode mỗi epoch; mặc định theo protocol")
+    s.add_argument("--epochs", type=int, default=None)
+    s.add_argument("--lr", type=float, default=None)
     s.add_argument("--seed", type=int, default=0)
+    s.add_argument('--init-head', default=None, help='Warm-start catalog head; epoch zero is retained.')
     s.add_argument("--quiet", action="store_true", help="không in lịch sử từng epoch ở cuối")
     s.set_defaults(func=cmd_train_head)
 
     s = sub.add_parser("calibrate", parents=[common], help="đăng ký prototype + hiệu chỉnh ngưỡng")
     s.add_argument("--k-shot", type=int, default=None)
     s.add_argument("--alpha", type=float, default=None)
+    s.add_argument('--replace-catalog', action='store_true',
+                   help='cho phép reset SKU/support đăng ký ngoài dataset khi dựng catalog mới')
     s.set_defaults(func=cmd_calibrate)
 
     s = sub.add_parser("seed-scenarios", parents=[common], help="seed hồ sơ lô/chứng từ cho các kịch bản")
     s.set_defaults(func=cmd_seed_scenarios)
 
     s = sub.add_parser("evaluate", parents=[common], help="đánh giá đầy đủ + xuất báo cáo")
+    s.add_argument('--robustness', action='store_true', help='nhiễu túi/lưới/màu/ánh sáng trên test, không fit lại ngưỡng')
+    s.add_argument('--stress-max-per-class', type=int, default=5)
+    s.add_argument('--hard-pairs', default=None, help='CSV true_sku,claimed_sku,kind (cultivar/origin)')
     s.add_argument('--scenarios', action='store_true', help='thêm kịch bản hồ sơ MÔ PHỎNG trong DB riêng của run')
+    s.add_argument('--use-catalog', action='store_true', help='đánh giá đúng bank/calibration đang lưu, không fit lại ngưỡng')
     s.add_argument("--k-shot", type=int, default=None)
     s.add_argument("--alpha", type=float, default=None)
     s.set_defaults(func=cmd_evaluate)
@@ -544,6 +627,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("cache-clear", parents=[common], help="xoá cache embedding")
     s.set_defaults(func=cmd_cache_clear)
+
+    s = sub.add_parser('benchmark', parents=[common], help='đo p50/p95/p99 tại POS, có và không cache')
+    s.add_argument('images', nargs='+')
+    s.add_argument('--repeats', type=int, default=20)
+    s.add_argument('--warmup', type=int, default=3)
+    s.add_argument('--sku', default=None)
+    s.add_argument('--lot', default=None)
+    s.add_argument('--out', default='var/thesis/performance.json')
+    s.set_defaults(func=cmd_benchmark)
 
     s = sub.add_parser("status", parents=[common], help="tình trạng hệ thống")
     s.set_defaults(func=cmd_status)

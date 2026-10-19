@@ -156,12 +156,15 @@ class HealthConsistencyTests(unittest.TestCase):
 class DemoConsistencyTests(unittest.TestCase):
     def test_checkout_displays_every_accepted_candidate(self):
         from app import demo
+        from rpv.services.checkout import CheckoutResponse
         candidates = [{'label': f'Accepted {i}', 'distance': .1, 'in_prediction_set': True}
                       for i in range(10)]
-        response = SimpleNamespace(
+        response = CheckoutResponse(
+            request_id='test', requires_operator=True,
             outcome='assist', origin_summary='Test', provenance_status='missing',
+            decision_state='abstain',
             messages=[], reasons=[], recognition={'candidates': candidates}, verification={},
-            audit={}, to_json=lambda: {},
+            audit={},
         )
         service = Mock()
         service.process.return_value = response
@@ -169,6 +172,7 @@ class DemoConsistencyTests(unittest.TestCase):
             rendered, _ = demo.checkout('unused.png', None, None, None, False)
         for candidate in candidates:
             self.assertIn(candidate['label'], rendered)
+        self.assertIn('Chưa đủ chắc chắn / hàng ngoài danh mục', rendered)
 
 
 class RunnerConsistencyTests(unittest.TestCase):

@@ -34,7 +34,10 @@ def main():
             env = os.environ.copy()
             env.update({'RPV_DATA_DIR': str(Path(args.data_dir).resolve()), 'RPV_ENCODER': encoder,
                         'RPV_PROJECTION_CKPT': '', 'RPV_CLASS_SPLIT_SEED': str(seed),
-                        'RPV_REPORTS': str(output), 'PYTHONIOENCODING': 'utf-8'})
+                        'RPV_REPORTS': str(output), 'PYTHONIOENCODING': 'utf-8',
+                        'RPV_CATALOG_BACKEND': 'prototype', 'RPV_CONFIDENCE_METHOD': 'energy',
+                        'RPV_CONFORMAL_SCORE': 'distance', 'RPV_RISK_CALIBRATION': 'known',
+                        'RPV_PROTOTYPE_COLOR_WEIGHT': '0', 'RPV_DECISION_RULE': 'conformal'})
             command = [sys.executable, '-m', 'rpv.cli', 'evaluate', '--k-shot', str(args.k_shot)]
             print(f'{encoder}, support seed={seed}', flush=True)
             result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, encoding='utf-8')

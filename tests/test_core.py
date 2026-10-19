@@ -967,18 +967,20 @@ class TestRecognizerOutputContract(unittest.TestCase):
 
     def test_prediction_set_is_never_truncated_by_top_k(self):
         from dataclasses import replace
-        distances = {sku: .1 for sku in self.bank.sku_ids[:10]}
+        accepted = set(self.bank.sku_ids[:10])
+        distances = {sku: .1 if sku in accepted else 2.0 for sku in self.bank.sku_ids}
         calibration = replace(self.calib, conformal_quantile={}, global_conformal_quantile=1.0)
         result = Recognizer(self.enc, self.bank, calibration, top_k=3).recognize_distances(distances)
         self.assertEqual(result.status, 'ambiguous')
-        self.assertEqual(set(result.prediction_set), set(distances))
-        self.assertEqual({c.sku_id for c in result.candidates}, set(distances))
+        self.assertEqual(set(result.prediction_set), accepted)
+        self.assertEqual({c.sku_id for c in result.candidates}, accepted)
         self.assertTrue(all(c.in_prediction_set for c in result.candidates))
 
     def test_accepted_candidate_outside_nearest_top_k_is_still_shown(self):
         from dataclasses import replace
         skus = self.bank.sku_ids[:4]
-        distances = dict(zip(skus, [.1, .2, .3, .4]))
+        distances = {sku: 2.0 for sku in self.bank.sku_ids}
+        distances.update(dict(zip(skus, [.1, .2, .3, .4])))
         calibration = replace(self.calib, global_conformal_quantile=.01,
                               conformal_quantile={skus[-1]: .5})
         result = Recognizer(self.enc, self.bank, calibration, top_k=2).recognize_distances(distances)
@@ -986,7 +988,7 @@ class TestRecognizerOutputContract(unittest.TestCase):
         self.assertEqual([c.sku_id for c in result.candidates], skus[:2] + skus[-1:])
         self.assertEqual(result.top1.sku_id, skus[0])
         all_result = Recognizer(self.enc, self.bank, calibration, top_k=0).recognize_distances(distances)
-        self.assertEqual(len(all_result.candidates), 4)
+        self.assertEqual(len(all_result.candidates), len(self.bank))
 
     def test_result_json_is_valid_json_even_without_calibration(self):
         from rpv.util import json_dumps
@@ -1115,6 +1117,24 @@ class TestConfigValidation(unittest.TestCase):
 
 
 class TestDotEnvWindows(unittest.TestCase):
+    def test_launcher_inline_comments_are_repaired_without_replacing_overrides(self):
+        from unittest.mock import patch
+        from rpv.config import load_env_file, VisionConfig
+        with tempfile.TemporaryDirectory() as td:
+            env_file = Path(td) / '.env'
+            env_file.write_text('RPV_BATCH_SIZE=16\nRPV_ENCODER=dinov2\nRPV_TEST_PATH=data/images\n',
+                                encoding='utf-8')
+            with patch.dict(os.environ, {'RPV_BATCH_SIZE': '16              # giữ batch size hiện tại',
+                                         'RPV_ENCODER': 'dinov2 # backbone',
+                                         'RPV_TEST_PATH': 'data/My # photos'}):
+                load_env_file(env_file)
+                self.assertEqual(VisionConfig().batch_size, 16)
+                self.assertEqual(VisionConfig().encoder, 'dinov2')
+                self.assertEqual(os.environ['RPV_TEST_PATH'], 'data/My # photos')
+                os.environ['RPV_BATCH_SIZE'] = '64'
+                load_env_file(env_file)
+                self.assertEqual(VisionConfig().batch_size, 64)
+
     def test_windows_paths_comments_and_precedence(self):
         from rpv.config import load_env_file
         with tempfile.TemporaryDirectory() as td:

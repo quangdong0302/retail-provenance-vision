@@ -1,5 +1,12 @@
 # Dữ liệu, huấn luyện và đánh giá
 
+Phiên bản hiện tại dùng head NoAux 336px, conformal relative, nearest-ratio
+và risk mục tiêu 2% trên known-calibration cùng extra-development.
+Xem [SELECTED_PROTOCOL](SELECTED_PROTOCOL.md) để chạy cấu hình đã chọn.
+Trainer `episodic` và các cấu hình trước giữ lại cho đối chứng.
+Cách chạy stress test, hard negative, benchmark POS và cách đọc risk/coverage:
+[REVIEW_CHANGES](REVIEW_CHANGES.md).
+
 ## 1. Dữ liệu dùng cho dự án
 
 ```text
@@ -102,8 +109,9 @@ riêng của run. Không coi dữ liệu kịch bản là hồ sơ truy xuất t
 
 ## 5. Phân biệt reset model và reset toàn bộ ứng dụng
 
-- Reset model: bỏ cache embedding, head, bank/calibration, báo cáo và smoke
-  output. Giữ `data/dataset_v2` cùng `manifest.json` để so sánh trên cùng split.
+- Khi train lại head, giữ `var/embed_cache/` để dùng lại vector backbone.
+  Có thể tạo head và bank/calibration ở đường dẫn mới để giữ bản đối chứng;
+  giữ `data/dataset_v2` cùng `manifest.json` để so sánh trên cùng split.
 - Reset toàn bộ: bỏ thêm DB, audit và hồ sơ đăng ký trong `var/thesis`. Các
   ảnh nhập qua ứng dụng thuộc hồ sơ đăng ký; lưu ra ngoài nếu cần dùng lại.
 - Dừng mọi process API/demo/train trước khi dọn. File `.lock` đi cùng audit;

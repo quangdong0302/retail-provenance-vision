@@ -71,9 +71,30 @@ if _HAS_TORCH:
             nn.init.eye_(self.residual.weight)
             nn.init.zeros_(self.net[-1].weight)
             nn.init.zeros_(self.net[-1].bias)
+            self.register_buffer('metric_matrix',None)
+            self.register_buffer('metric_bias',None)
+
+        def load_state_dict(self,state_dict,strict=True,**kwargs):
+            matrix = state_dict.get('metric_matrix')
+            bias = state_dict.get('metric_bias')
+            if (matrix is None) != (bias is None):
+                raise ValueError('Metric matrix and bias must be stored together.')
+            if matrix is not None:
+                if (matrix.shape != (self.out_dim,self.out_dim) or bias.shape != (self.out_dim,)
+                        or not torch.isfinite(matrix).all() or not torch.isfinite(bias).all()
+                        or torch.linalg.vector_norm(matrix)<1e-8):
+                    raise ValueError('Invalid shared prototype metric.')
+                self.metric_matrix = torch.empty_like(matrix)
+                self.metric_bias = torch.empty_like(bias)
+            else:
+                self.metric_matrix = self.metric_bias = None
+            return super().load_state_dict(state_dict,strict=strict,**kwargs)
 
         def forward(self, x):
-            return F.normalize(self.net(x) + self.residual(x), dim=-1)
+            z = F.normalize(self.net(x) + self.residual(x), dim=-1)
+            if self.metric_matrix is not None:
+                z = F.normalize(F.linear(z,self.metric_matrix,self.metric_bias),dim=-1)
+            return z
 
     def prototypical_loss(support, query, query_labels, temperature: float = 10.0):
         """support: [n_way, k_shot, D]; query: [n_query, D]; labels: [n_query].
